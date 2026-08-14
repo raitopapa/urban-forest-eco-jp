@@ -18,7 +18,7 @@ export function TreeMap({ trees, selectedTreeId, onSelectTree }: Props) {
   const treesRef = useRef(trees);
   const selectedRef = useRef(selectedTreeId);
   const selectRef = useRef(onSelectTree);
-  const previousSelectedRef = useRef<string>();
+  const previousSelectedRef = useRef<string | undefined>(undefined);
   const [mapError, setMapError] = useState(false);
 
   treesRef.current = trees;
