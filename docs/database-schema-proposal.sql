@@ -106,13 +106,17 @@ create index organization_members_user_id_idx on public.organization_members (us
 create index projects_organization_id_idx on public.projects (organization_id);
 create index trees_organization_id_idx on public.trees (organization_id);
 create index trees_project_status_idx on public.trees (project_id, status);
+create index trees_project_organization_idx on public.trees (project_id, organization_id);
 create index trees_location_idx on public.trees using gist (location);
 create index tree_surveys_organization_id_idx on public.tree_surveys (organization_id);
 create index tree_surveys_tree_latest_idx on public.tree_surveys (tree_id, surveyed_at desc, id desc);
+create index tree_surveys_tree_organization_idx on public.tree_surveys (tree_id, organization_id);
 create index tree_surveys_surveyed_by_idx on public.tree_surveys (surveyed_by);
 create index custom_fields_organization_id_idx on public.custom_field_definitions (organization_id);
 create index custom_fields_project_scope_active_idx
   on public.custom_field_definitions (project_id, scope, is_active);
+create index custom_fields_project_organization_idx
+  on public.custom_field_definitions (project_id, organization_id);
 
 create or replace function private.set_updated_at()
 returns trigger
