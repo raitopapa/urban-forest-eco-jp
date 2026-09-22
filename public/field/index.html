@@ -405,4 +405,150 @@ function renderEntry(){
         field("樹冠基部高 (m)", `<input type="number" inputmode="decimal" step="0.1" data-k="crownBase" value="${esc(r.crownBase)}">`) +
         field("樹冠幅 南北 (m)", `<input type="number" inputmode="decimal" step="0.1" data-k="cwNS" value="${esc(r.cwNS)}">`) +
         field("樹冠幅 東西 (m)", `<input type="number" inputmode="decimal" step="0.1" data-k="cwEW" value="${esc(r.cwEW)}">`) +
-        field("樹冠欠損率 (%)", chipRow("missing", CLASSES, r.missi
+        field("樹冠欠損率 (%)", chipRow("missing", CLASSES, r.missing, "wrap6"), "実測寸法で描いた外郭の内側で、枝葉がない割合。");
+    }
+  }
+  html += block("itree", "i-Tree 調査項目", itree);
+
+  html += block("c1", "① 利用・維持管理", toggles("c1", CHK1, r.c1), r.c1.length);
+  html += block("c2", "②③ 活力・樹体異常", toggles("c2", CHK2, r.c2), r.c2.length);
+  html += block("c3", "④ 生育環境・造成影響", toggles("c3", CHK3, r.c3), r.c3.length);
+
+  html += block("rec", "記録",
+    field("特記事項", `<textarea data-k="note" placeholder="測定位置を変えた理由、判定に迷った点など">${esc(r.note)}</textarea>`) +
+    field("写真", `<div class="photo-actions">
+        <button type="button" id="btnPhoto" class="save sec" style="padding:0 14px">カメラ／写真を追加</button>
+        <span style="font-size:13px;color:var(--ink2)">${(r.photoIds||[]).length}枚</span>
+        <input type="file" id="photoInput" accept="image/*" capture="environment" multiple hidden>
+      </div><div id="photoList" class="photo-list"></div><div class="storage-line">写真は通信なしでも端末内のIndexedDBに保存します。樹木保存時に写真No.を自動付与します。</div>`) +
+    field("写真No.", `<input type="text" data-k="photo" value="${esc(r.photo)}" placeholder="撮影写真は自動入力">`) +
+    field("位置", `<div style="display:flex;gap:8px;align-items:center">
+        <button type="button" id="btnGps" class="save sec" style="min-height:46px;padding:0 14px">現在地を取得</button>
+        <span style="font-size:13px;color:var(--ink2)" id="gpsTxt">${r.lat?esc(r.lat)+", "+esc(r.lon):"未取得"}</span></div>`,
+      "台帳の緯度・経度に貼る用です。木の真下で取得してください。"));
+
+  html += `<datalist id="dlSpecies">${SPECIES.map(s=>`<option>${esc(s)}</option>`).join("")}</datalist>`;
+  if (editingId) html += `<div class="note"><b>編集中</b>保存すると一覧の記録が上書きされます。</div>`;
+
+  document.getElementById("view-entry").innerHTML = html;
+  updateResult();
+  renderPhotoList();
+}
+
+function updateResult(){
+  const j = judge(cur), miss = missingFields(cur);
+  const ok = miss.length === 0;
+  document.getElementById("rl1").textContent = cur.no ? `${cur.no}　${j.result}` : j.result;
+  const pills = `<span class="pill ${ok?"ok":"warn"}">${ok?"入力充足":"未入力 "+miss.length}</span>` +
+    `<span class="pill ${j.h?"bad":"ok"}">外観診断 ${j.diag}</span>` +
+    `<span class="pill ${j.e?"warn":"ok"}">基盤 ${j.base}</span>`;
+  document.getElementById("rl2").innerHTML = pills + (ok ? `①${j.m} ②③${j.h} ④${j.e}` : esc(miss.join("・")));
+  document.getElementById("btnSave").disabled = !(cur.no || cfg.next) || !cur.species;
+  document.getElementById("cntBadge").textContent = records.length + "本";
+  persistDraft();
+}
+
+
+/* ---------- photos (IndexedDB / offline) ---------- */
+function cleanupPhotoUrls(){ photoUrls.forEach(u=>URL.revokeObjectURL(u)); photoUrls=[]; }
+function fmtBytes(n){
+  if (!Number.isFinite(n)) return "";
+  if (n < 1024*1024) return Math.max(1,Math.round(n/1024))+" KB";
+  return (n/1024/1024).toFixed(1)+" MB";
+}
+async function renderPhotoList(){
+  const el = document.getElementById("photoList"); if (!el || !idb) return;
+  cleanupPhotoUrls();
+  const ids = Array.isArray(cur.photoIds) ? cur.photoIds : (cur.photoIds=[]);
+  if (!ids.length){ el.innerHTML = ""; return; }
+  const cards=[];
+  for (let i=0;i<ids.length;i++){
+    const p=await dbGet(STORE_PHOTOS,ids[i]); if(!p) continue;
+    const u=URL.createObjectURL(p.blob); photoUrls.push(u);
+    cards.push(`<div class="photo-card"><img src="${u}" alt="樹木写真 ${i+1}">
+      <button type="button" class="pdel" data-photo-del="${esc(p.id)}" aria-label="写真を削除">×</button>
+      <div class="pm"><b>${esc(p.photoNo || "保存時に写真No.付与")}</b>${esc(fmtBytes(p.size||p.blob.size))}</div></div>`);
+  }
+  el.innerHTML=cards.join("");
+}
+async function addPhotos(files){
+  if (!idb || !files || !files.length) return;
+  cur.photoIds = Array.isArray(cur.photoIds) ? cur.photoIds : [];
+  for (const f of files){
+    if (!f.type || !f.type.startsWith("image/")){ toast("画像ファイルだけ追加できます"); continue; }
+    const id=uid();
+    await dbPut(STORE_PHOTOS,{id,recordId:editingId||null,treeNo:cur.no||"",photoNo:"",name:f.name||"photo",type:f.type,size:f.size,createdAt:new Date().toISOString(),blob:f});
+    cur.photoIds.push(id);
+  }
+  persistDraft(); await renderPhotoList(); await updateStorageBadge();
+  toast(`${files.length}枚を端末に保存しました`);
+}
+async function removePhoto(id){
+  await dbDelete(STORE_PHOTOS,id);
+  cur.photoIds=(cur.photoIds||[]).filter(x=>x!==id);
+  persistDraft(); await renderPhotoList(); await updateStorageBadge();
+}
+async function finalizePhotos(rec){
+  const ids=Array.isArray(rec.photoIds)?rec.photoIds:[];
+  const nos=[];
+  for(let i=0;i<ids.length;i++){
+    const p=await dbGet(STORE_PHOTOS,ids[i]); if(!p) continue;
+    p.recordId=rec.id; p.treeNo=rec.no; p.photoNo=`${rec.no}-${String(i+1).padStart(2,"0")}`; p.updatedAt=new Date().toISOString();
+    await dbPut(STORE_PHOTOS,p); nos.push(p.photoNo);
+  }
+  if(nos.length) rec.photo=nos.join(", ");
+}
+async function deleteRecordPhotos(r){
+  for(const id of (r.photoIds||[])) await dbDelete(STORE_PHOTOS,id);
+}
+async function updateStorageBadge(){
+  const b=document.getElementById("storeBadge"); if(!b) return;
+  try{
+    const persisted = navigator.storage && navigator.storage.persisted ? await navigator.storage.persisted() : false;
+    const est = navigator.storage && navigator.storage.estimate ? await navigator.storage.estimate() : null;
+    const used = est && Number.isFinite(est.usage) ? ` ${fmtBytes(est.usage)}` : "";
+    b.textContent = `端末保存${used}${persisted?" ✓":""}`;
+  }catch(e){ b.textContent="端末保存"; }
+}
+
+/* ---------- events ---------- */
+document.addEventListener("input", e=>{
+  const k = e.target.dataset.k; if (!k) return;
+  const v = e.target.value;
+  if (k.startsWith("cfg")){
+    const f = k.slice(3);
+    if (f === "next") cfg.next = Math.max(1, parseInt(v||"1",10));
+    else cfg[f === "mode" ? "mode" : f === "surveyor" ? "surveyor" : f === "date" ? "date" : "prefix"] = v;
+    persistCfg().catch(()=>{});
+    if (f === "mode") renderEntry();
+    return;
+  }
+  if (k.startsWith("dbh") && k.length === 4) cur.dbh[+k[3]] = v;
+  else cur[k] = v;
+  if (k === "life") renderEntry(); else updateResult();
+});
+document.addEventListener("click", e=>{
+  const h2 = e.target.closest("section.block>h2");
+  if (h2){
+    const s = h2.parentElement; s.classList.toggle("collapsed");
+    lsSet("treefield.collapsed."+s.dataset.block, s.classList.contains("collapsed"));
+    return;
+  }
+  const chip = e.target.closest("[data-chip] button");
+  if (chip){
+    const key = chip.parentElement.dataset.chip;
+    cur[key] = (String(cur[key]) === chip.dataset.v) ? "" : chip.dataset.v;
+    [...chip.parentElement.children].forEach(b=>b.setAttribute("aria-pressed", String(String(cur[key])===b.dataset.v)));
+    updateResult(); return;
+  }
+  const tg = e.target.closest(".tg");
+  if (tg){
+    const key = tg.dataset.tg, t = tg.dataset.t, arr = cur[key];
+    const i = arr.indexOf(t);
+    if (i >= 0) arr.splice(i,1); else arr.push(t);
+    tg.setAttribute("aria-pressed", String(i < 0));
+    const cnt = tg.closest("section.block").querySelector(".cnt");
+    if (cnt) cnt.textContent = arr.length;
+    updateResult(); return;
+  }
+  if (e.target.id === "btnPhoto") 
