@@ -270,4 +270,139 @@ async function migrateLegacy(){
       await dbPut(STORE_RECORDS,r); moved++;
     }
   }
-  const legacyCfg = lsGet(LEGACY_LS_C
+  const legacyCfg = lsGet(LEGACY_LS_CFG,null);
+  if (legacyCfg && !(await dbGet(STORE_SETTINGS,"cfg"))) await saveSetting("cfg",legacyCfg);
+  const legacyDraft = lsGet(LEGACY_LS_DRAFT,null);
+  if (legacyDraft && !(await dbGet(STORE_SETTINGS,"draft"))) await saveSetting("draft",legacyDraft);
+  await saveSetting("legacyMigrated",true);
+  return moved;
+}
+
+function blank(){
+  return {no:"", species:"", life:"生存", site:"", use:"", near:"", land:"",
+    dbh:["","","","","",""], dbhH:"", deadStems:"", ht:"", dieback:"", cle:"",
+    liveHt:"", crownBase:"", cwNS:"", cwEW:"", missing:"",
+    c1:[], c2:[], c3:[], note:"", photo:"", photoIds:[], lat:"", lon:""};
+}
+
+function toast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("on");
+  clearTimeout(t._h); t._h = setTimeout(()=>t.classList.remove("on"), 2200);
+}
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function num(v){ const n = parseFloat(v); return isFinite(n) ? n : null; }
+
+/* ---------- judgement (Excelの数式と同じロジック) ---------- */
+function judge(r){
+  const m = r.c1.length, h = r.c2.length, e = r.c3.length;
+  let result;
+  if (r.life === "枯死") result = "枯死（撤去・安全確認）";
+  else if (!m && !h && !e) result = "概ね良好・異常なし";
+  else if (h) result = m ? "外観診断＋維持管理処置" : "外観診断が必要";
+  else if (m) result = "維持管理処置が必要";
+  else result = "生育環境・基盤の詳細確認";
+  return {m, h, e, result,
+    diag: r.life === "枯死" ? "対象外（枯死）" : (h ? "対象" : "対象外"),
+    base: e ? "対象" : "対象外"};
+}
+function missingFields(r){
+  const out = [];
+  if (!r.no) out.push("樹木番号");
+  if (!r.species) out.push("樹種");
+  if (num(r.dbh[0]) === null) out.push("DBH1");
+  if (num(r.ht) === null) out.push("全樹高");
+  if (r.life !== "枯死"){
+    if (r.dieback === "") out.push("枝枯れ率");
+    if (r.cle === "") out.push("CLE");
+    if (cfg.mode === "B"){
+      if (num(r.liveHt) === null) out.push("生存部樹高");
+      if (num(r.crownBase) === null) out.push("樹冠基部高");
+      if (num(r.cwNS) === null) out.push("樹冠幅南北");
+      if (num(r.cwEW) === null) out.push("樹冠幅東西");
+      if (r.missing === "") out.push("樹冠欠損率");
+    }
+  }
+  return out;
+}
+
+/* ---------- entry view ---------- */
+function field(label, inner, hint){
+  return `<div class="f"><label>${esc(label)}</label><div class="c">${inner}</div></div>` +
+         (hint ? `<div class="hint">${esc(hint)}</div>` : "");
+}
+function sel(key, opts, val, blankLabel){
+  return `<select data-k="${key}"><option value="">${esc(blankLabel||"—")}</option>` +
+    opts.map(o=>`<option${o===val?" selected":""}>${esc(o)}</option>`).join("") + `</select>`;
+}
+function chipRow(key, values, val, cls, labelFn){
+  return `<div class="chips ${cls||""}" data-chip="${key}">` +
+    values.map(v=>`<button type="button" data-v="${v}" aria-pressed="${String(v)===String(val)}">${esc(labelFn ? labelFn(v) : v)}</button>`).join("") +
+    `</div>`;
+}
+function diebackLabel(v){
+  const n = Number(v);
+  if (n === 0) return "0%";
+  if (n === 100) return "100%";
+  return `約${n-2}～${Math.min(99,n+2)}%`;
+}
+function diebackSelect(val){
+  return `<select data-k="dieback"><option value="">— 選択 —</option>` +
+    CLASSES.map(v=>`<option value="${v}"${String(v)===String(val)?" selected":""}>${esc(diebackLabel(v))}</option>`).join("") +
+    `</select>`;
+}
+function block(id, title, bodyHtml, count){
+  const open = !(lsGet("treefield.collapsed."+id, false));
+  return `<section class="block${open?"":" collapsed"}" data-block="${id}">
+    <h2><span class="caret">▾</span>${esc(title)}${count!=null?`<span class="cnt">${count}</span>`:""}</h2>
+    <div class="body">${bodyHtml}</div></section>`;
+}
+function toggles(key, items, chosen){
+  return items.map(t=>`<button type="button" class="tg" data-tg="${key}" data-t="${esc(t)}" aria-pressed="${chosen.includes(t)?"true":"false"}">
+    <span class="mark">✓</span><span class="t">${esc(t)}</span></button>`).join("");
+}
+
+function renderEntry(){
+  const r = cur, dead = r.life === "枯死";
+  const B = cfg.mode === "B";
+  const stems = r.dbh.map((v,i)=>`<div><div class="lb">DBH${i+1} (cm)</div>
+      <input type="number" inputmode="decimal" step="0.1" data-k="dbh${i}" value="${esc(v)}"></div>`).join("");
+
+  let html = "";
+
+  html += block("cfg", "調査の設定",
+    field("調査モード", `<select data-k="cfgmode">
+        <option value="A"${cfg.mode==="A"?" selected":""}>A：炭素優先</option>
+        <option value="B"${cfg.mode==="B"?" selected":""}>B：生態系サービス標準</option></select>`) +
+    field("点検者", `<input type="text" data-k="cfgsurveyor" value="${esc(cfg.surveyor)}" placeholder="氏名">`) +
+    field("点検日", `<input type="date" data-k="cfgdate" value="${esc(cfg.date)}">`) +
+    field("番号の付け方", `<div style="display:flex;gap:8px">
+        <input type="text" data-k="cfgprefix" value="${esc(cfg.prefix)}" style="flex:0 0 40%" placeholder="K-">
+        <input type="number" data-k="cfgnext" value="${cfg.next}" style="flex:1" min="1"></div>`,
+      "保存するたびに連番が1つ進みます。番号は入力欄で直せます。"));
+
+  html += block("basic", "基本",
+    field("樹木番号", `<input type="text" data-k="no" value="${esc(r.no)}" placeholder="${esc(cfg.prefix + String(cfg.next).padStart(3,"0"))}">`) +
+    field("樹種（和名）", `<input type="text" data-k="species" list="dlSpecies" value="${esc(r.species)}" placeholder="入力または選択">`) +
+    field("生育状態", sel("life", LIFE, r.life)) +
+    field("立地区分", sel("site", SITE, r.site)) +
+    field("周辺利用", sel("use", USE, r.use)) +
+    field("近接対象", sel("near", NEAR, r.near)) +
+    field("土地利用", sel("land", LAND, r.land, "現地で分かれば"), "空欄なら台帳側で立地区分から自動で当てます。"));
+
+  let itree = `<div class="hint" style="padding-top:10px">DBHは地上1.37 m・0.1 cm単位。株立ちは大きい順に最大6幹。</div>
+    <div class="stems">${stems}</div>` +
+    field("DBH測定高 (m)", `<input type="number" inputmode="decimal" step="0.01" data-k="dbhH" value="${esc(r.dbhH)}" placeholder="1.37以外で測ったときだけ">`) +
+    field("枯死幹数", `<input type="number" inputmode="numeric" step="1" min="0" data-k="deadStems" value="${esc(r.deadStems)}">`) +
+    field("全樹高 (m)", `<input type="number" inputmode="decimal" step="0.1" data-k="ht" value="${esc(r.ht)}">`);
+  if (dead){
+    itree += `<div class="hint" style="color:var(--amber)">枯死木なので枝枯れ率・CLE${B?"・樹冠4項目":""}は入力しません。取込時に自動で −1 / 100 が入ります。</div>`;
+  } else {
+    itree += field("枝枯れ率", diebackSelect(r.dieback), "画面では判定しやすい範囲を表示。保存・CSVではi-Tree標準の代表値（3, 8, 13…%）として記録します。生きた樹冠の中の枯死枝。下枝の自然な枯れ上がりは除く。") +
+             field("CLE (0〜5)", chipRow("cle", [0,1,2,3,4,5], r.cle), "上面1＋側面4のうち直射光を受ける面の数。");
+    if (B){
+      itree += field("生存部樹高 (m)", `<input type="number" inputmode="decimal" step="0.1" data-k="liveHt" value="${esc(r.liveHt)}">`) +
+        field("樹冠基部高 (m)", `<input type="number" inputmode="decimal" step="0.1" data-k="crownBase" value="${esc(r.crownBase)}">`) +
+        field("樹冠幅 南北 (m)", `<input type="number" inputmode="decimal" step="0.1" data-k="cwNS" value="${esc(r.cwNS)}">`) +
+        field("樹冠幅 東西 (m)", `<input type="number" inputmode="decimal" step="0.1" data-k="cwEW" value="${esc(r.cwEW)}">`) +
+        field("樹冠欠損率 (%)", chipRow("missing", CLASSES, r.missi
