@@ -12,6 +12,13 @@
 - 独自列を追加項目として保持する
 - i-Tree Eco向け入力候補CSVを出力する
 
+## Webアプリ
+
+- 管理・可視化画面: GitHub Pages ルート
+- 現地入力PWA: `/field/`
+- 現地入力はIndexedDBへ保存し、オフラインでも利用可能
+- Supabase自動同期は次段階で実装予定
+
 ## 起動
 
 ```bash
