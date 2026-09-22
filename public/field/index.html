@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>樹木点検 現地入力 | Urban Forest Eco JP</title>
+<meta name="theme-color" content="#2F6B58">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<style>
+:root{
+  --ink:#14231C; --ink2:#4A5B52; --paper:#FFFFFF; --field:#F1F4F0; --line:#C9D2C6;
+  --green:#2F6B58; --green-d:#1F4A3C; --amber:#A85F00; --amber-bg:#FFF3DE;
+  --red:#A32017; --red-bg:#FDEDEC; --blue:#1F4E79; --blue-bg:#E8F0F8;
+  --r:10px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Yu Gothic",YuGothic,"Noto Sans JP",Meiryo,sans-serif;
+  background:var(--field); color:var(--ink); font-size:16px; line-height:1.5;
+  padding-bottom:132px;
+}
+button,input,select,textarea{font:inherit;color:inherit}
+
+/* ---- top bar ---- */
+header{
+  position:sticky; top:0; z-index:30; background:var(--green); color:#fff;
+  padding:8px 12px calc(8px + env(safe-area-inset-top,0)) 12px;
+  padding-top:calc(8px + env(safe-area-inset-top,0));
+}
+.hrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.htitle{font-size:15px;font-weight:700;letter-spacing:.02em;margin-right:auto}
+.badge{font-size:12px;padding:3px 9px;border-radius:999px;background:rgba(255,255,255,.18);white-space:nowrap}
+.badge.off{background:#7A2E28}
+.tabs{display:flex;gap:6px;margin-top:8px}
+.tabs button{
+  flex:1;padding:9px 0;border:0;border-radius:8px;background:rgba(255,255,255,.14);
+  color:#fff;font-size:15px;font-weight:600
+}
+.tabs button[aria-selected="true"]{background:#fff;color:var(--green-d)}
+
+/* ---- layout ---- */
+main{max-width:760px;margin:0 auto;padding:12px}
+section.block{background:var(--paper);border:1px solid var(--line);border-radius:var(--r);margin-bottom:12px;overflow:hidden}
+section.block>h2{
+  margin:0;font-size:15px;font-weight:700;padding:12px 14px;background:var(--green);color:#fff;
+  display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none
+}
+section.block>h2 .cnt{margin-left:auto;font-size:13px;font-weight:600;background:rgba(255,255,255,.2);border-radius:999px;padding:2px 9px}
+section.block>h2 .caret{transition:transform .15s}
+section.block.collapsed>h2 .caret{transform:rotate(-90deg)}
+section.block.collapsed .body{display:none}
+.body{padding:4px 0}
+
+.f{display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid #EDF0EC}
+.f:last-child{border-bottom:0}
+.f>label{flex:0 0 40%;font-size:14px;color:var(--ink2);line-height:1.3}
+.f>.c{flex:1;min-width:0}
+input[type=text],input[type=number],input[type=date],select,textarea{
+  width:100%;padding:11px 10px;border:1px solid var(--line);border-radius:8px;background:var(--paper);
+  font-size:17px;min-height:46px
+}
+textarea{min-height:84px;resize:vertical;font-size:16px}
+input:focus,select:focus,textarea:focus{outline:3px solid #9BC2B4;outline-offset:1px;border-color:var(--green)}
+.hint{font-size:12px;color:var(--ink2);padding:2px 14px 10px}
+
+/* ---- chips ---- */
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips button{
+  min-width:52px;min-height:46px;padding:0 12px;border:1px solid var(--line);border-radius:8px;
+  background:var(--paper);font-size:17px;font-weight:600
+}
+.chips button[aria-pressed="true"]{background:var(--blue);border-color:var(--blue);color:#fff}
+.chips.wrap6 button{min-width:44px}
+.chips.ranges button{flex:1 1 calc(33.333% - 6px);min-width:96px;padding:0 8px;font-size:15px}
+
+/* ---- toggles ---- */
+.tg{display:flex;align-items:center;gap:12px;width:100%;padding:0 14px;min-height:56px;
+  border:0;border-bottom:1px solid #EDF0EC;background:var(--paper);text-align:left;font-size:16px}
+.tg:last-child{border-bottom:0}
+.tg .mark{flex:0 0 34px;height:34px;border:2px solid var(--line);border-radius:8px;display:grid;place-items:center;font-size:19px;font-weight:700;color:transparent}
+.tg[aria-pressed="true"]{background:var(--amber-bg)}
+.tg[aria-pressed="true"] .mark{border-color:var(--amber);color:var(--amber)}
+.tg[aria-pressed="true"] .t{font-weight:700}
+
+/* ---- stems ---- */
+.stems{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:0 14px 10px}
+.stems input{font-size:17px}
+.stems .lb{font-size:12px;color:var(--ink2);margin-bottom:2px}
+
+/* ---- result bar ---- */
+.resultbar{
+  position:fixed;left:0;right:0;bottom:0;z-index:40;background:var(--paper);
+  border-top:1px solid var(--line);box-shadow:0 -4px 14px rgba(20,35,28,.10);
+  padding:8px 12px calc(8px + env(safe-area-inset-bottom,0)) 12px
+}
+.rgrid{max-width:760px;margin:0 auto;display:flex;align-items:center;gap:10px}
+.rtext{flex:1;min-width:0}
+.rline1{font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rline2{font-size:12px;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pill{display:inline-block;font-size:12px;font-weight:700;padding:2px 8px;border-radius:999px;margin-right:5px}
+.pill.ok{background:#E4F0EA;color:var(--green-d)}
+.pill.warn{background:var(--amber-bg);color:var(--amber)}
+.pill.bad{background:var(--red-bg);color:var(--red)}
+.save{flex:0 0 auto;min-height:52px;padding:0 22px;border:0;border-radius:10px;background:var(--green);color:#fff;font-size:17px;font-weight:700}
+.save:disabled{background:#B7C3BC}
+.save.sec{background:var(--paper);color:var(--green-d);border:2px solid var(--green)}
+
+/* ---- list ---- */
+.card{background:var(--paper);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;margin-bottom:10px;display:flex;gap:12px;align-items:flex-start}
+.card .no{font-size:18px;font-weight:700;flex:0 0 auto}
+.card .meta{flex:1;min-width:0;font-size:14px;color:var(--ink2)}
+.card .meta b{color:var(--ink);font-size:16px;font-weight:700}
+.card button{border:1px solid var(--line);background:var(--paper);border-radius:8px;min-height:44px;padding:0 14px;font-size:15px}
+.toolbar{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.toolbar button{flex:1;min-height:48px;border:1px solid var(--line);background:var(--paper);border-radius:9px;font-size:15px;font-weight:600}
+.toolbar button.primary{background:var(--green);color:#fff;border-color:var(--green)}
+.empty{text-align:center;color:var(--ink2);padding:44px 20px;font-size:15px}
+.note{background:var(--blue-bg);border:1px solid #BBD3E8;border-radius:var(--r);padding:12px 14px;font-size:14px;margin-bottom:12px}
+.note b{display:block;margin-bottom:4px}
+.err{background:var(--red-bg);border:1px solid #E8B7B3;color:var(--red);border-radius:var(--r);padding:10px 14px;font-size:14px;margin-bottom:12px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:150px;z-index:60;background:var(--ink);color:#fff;
+  padding:12px 20px;border-radius:999px;font-size:15px;font-weight:600;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.on{opacity:1}
+
+/* ---- offline / photos ---- */
+.photo-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.photo-actions button{min-height:52px}
+.photo-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px}
+.photo-card{position:relative;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:var(--field)}
+.photo-card img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;background:#DCE4DF}
+.photo-card .pm{padding:7px 8px;font-size:12px;color:var(--ink2);line-height:1.35}
+.photo-card .pm b{display:block;color:var(--ink);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.photo-card .pdel{position:absolute;right:6px;top:6px;min-width:44px;min-height:44px;border:0;border-radius:8px;background:rgba(20,35,28,.82);color:#fff;font-weight:700}
+.storage-line{font-size:12px;color:var(--ink2);margin-top:7px}
+@media (min-width:640px){.photo-list{grid-template-columns:repeat(3,minmax(0,1fr))}}
+
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hrow">
+    <div class="htitle">樹木点検 現地入力</div>
+    <span class="badge" id="netBadge">オンライン</span>
+    <span class="badge" id="cntBadge">0本</span>
+    <span class="badge" id="storeBadge">端末保存</span>
+  </div>
+  <div class="tabs" role="tablist">
+    <button role="tab" id="tab-entry" aria-selected="true">入力</button>
+    <button role="tab" id="tab-list" aria-selected="false">一覧</button>
+    <button role="tab" id="tab-out" aria-selected="false">書き出し</button>
+  </div>
+</header>
+
+<main>
+  <div id="view-entry"></div>
+  <div id="view-list" hidden></div>
+  <div id="view-out" hidden></div>
+</main>
+
+<div class="resultbar" id="resultbar">
+  <div class="rgrid">
+    <div class="rtext">
+      <div class="rline1" id="rl1">樹木番号と樹種を入れてください</div>
+      <div class="rline2" id="rl2"></div>
+    </div>
+    <button class="save" id="btnSave" disabled>保存</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+
+const SPECIES = ["ケヤキ","イチョウ","ソメイヨシノ","ヤマザクラ","クスノキ","ハナミズキ","ヤマボウシ","トウカエデ","イロハモミジ","プラタナス（モミジバスズカケノキ）","トチノキ","ユリノキ","エンジュ","シラカシ","アラカシ","マテバシイ","スダジイ","コナラ","クヌギ","ムクノキ","エノキ","アキニレ","ハルニレ","コブシ","ハクモクレン","タイサンボク","サルスベリ","ナンキンハゼ","モクセイ（キンモクセイ）","クロガネモチ","モチノキ","ソヨゴ","ヤマモモ","シマトネリコ","ケヤマハンノキ","シダレヤナギ","ポプラ（セイヨウハコヤナギ）","メタセコイア","ラクウショウ","ヒマラヤスギ","クロマツ","アカマツ","スギ","ヒノキ","イヌマキ","カイヅカイブキ","ツバキ（ヤブツバキ）","サザンカ","ハナカイドウ","ウメ"];
+const LIFE = ["生存","枯死","切株","不明"];
+const SITE = ["公園・広場","住宅周辺緑地","通路・園路沿い","駐車場周辺","道路沿い","施設敷地内緑地","その他"];
+const USE  = ["低","中","高","不明"];
+const NEAR = ["なし","建物","通路・園路","道路","駐車場","遊具・ベンチ","照明・設備","塀・擁壁","架線","その他"];
+const LAND = ["住宅","集合住宅","商業・業務","工業","道路・交通","公園・緑地","公共施設","農地","空地","その他"];
+const CLASSES = [0,3,8,13,18,23,28,33,38,43,48,53,58,63,68,73,78,83,88,93,98,100];
+
+const CHK1 = ["利用空間への支障","建物・設備・構造物との競合","支柱・保護資材の異常/不要残置","太枝枯れ・折れ・ぶら下がり","根上がり・園路/舗装等への支障","樹冠の偏在・越境・強剪定"];
+const CHK2 = ["葉の状態","先端枝の枯れ","枯死・著しい衰弱","キノコの有無","開口空洞","樹皮枯死・欠損・腐朽","裂け・亀裂・接合部異常","病虫害","根元・根株の異常","揺れ","不自然な傾斜"];
+const CHK3 = ["土壌踏圧・固結・過度な被覆","盛土・深植え・根元埋没","掘削・根切り・造成/工事損傷","排水不良・過湿/著しい乾燥","根系空間不足・植栽基盤狭小"];
+
+const LEGACY_LS_REC = "treefield.records.v1";
+const LEGACY_LS_CFG = "treefield.config.v1";
+const LEGACY_LS_DRAFT = "treefield.draft.v1";
+const DB_NAME = "treefield.db";
+const DB_VERSION = 1;
+const STORE_RECORDS = "records";
+const STORE_PHOTOS = "photos";
+const STORE_SETTINGS = "settings";
+const STORE_SYNC = "syncQueue";
+
+let cfg = {mode:"A", surveyor:"", date:new Date().toISOString().slice(0,10), prefix:"K-", next:1};
+let records = [];
+let cur = blank();
+let editingId = null;
+let idb = null;
+let draftTimer = null;
+let photoUrls = [];
+
+// localStorageは、折りたたみ状態と旧版データの移行元にだけ使用する。
+function lsGet(k, fb){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : fb; }catch(e){ return fb; } }
+function lsSet(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+function uid(){ return (crypto.randomUUID ? crypto.randomUUID() : Date.now()+"-"+Math.random().toString(36).slice(2)); }
+
+function openTreeDb(){
+  return new Promise((resolve,reject)=>{
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = () => {
+      const d = req.result;
+      if (!d.objectStoreNames.contains(STORE_RECORDS)) d.createObjectStore(STORE_RECORDS,{keyPath:"id"});
+      if (!d.objectStoreNames.contains(STORE_SETTINGS)) d.createObjectStore(STORE_SETTINGS,{keyPath:"key"});
+      if (!d.objectStoreNames.contains(STORE_SYNC)) d.createObjectStore(STORE_SYNC,{keyPath:"id"});
+      if (!d.objectStoreNames.contains(STORE_PHOTOS)) {
+        const s = d.createObjectStore(STORE_PHOTOS,{keyPath:"id"});
+        s.createIndex("recordId","recordId",{unique:false});
+        s.createIndex("treeNo","treeNo",{unique:false});
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error || new Error("IndexedDBを開けません"));
+  });
+}
+function idbReq(store, mode, fn){
+  return new Promise((resolve,reject)=>{
+    const tx = idb.transaction(store,mode), os = tx.objectStore(store);
+    let req, result, failed=false;
+    try{ req = fn(os); }catch(e){ reject(e); return; }
+    req.onsuccess = () => { result=req.result; };
+    req.onerror = () => { failed=true; reject(req.error); };
+    tx.oncomplete = () => { if(!failed) resolve(result); };
+    tx.onerror = () => { if(!failed){ failed=true; reject(tx.error || new Error("保存処理に失敗しました")); } };
+    tx.onabort = () => { if(!failed){ failed=true; reject(tx.error || new Error("保存処理が中断されました")); } };
+  });
+}
+function dbGet(store,key){ return idbReq(store,"readonly",os=>os.get(key)); }
+function dbGetAll(store){ return idbReq(store,"readonly",os=>os.getAll()); }
+function dbPut(store,value){ return idbReq(store,"readwrite",os=>os.put(value)); }
+function dbDelete(store,key){ return idbReq(store,"readwrite",os=>os.delete(key)); }
+async function getSetting(key,fb){ const x=await dbGet(STORE_SETTINGS,key); return x ? x.value : fb; }
+function saveSetting(key,value){ return dbPut(STORE_SETTINGS,{key,value,updatedAt:new Date().toISOString()}); }
+function deleteSetting(key){ return dbDelete(STORE_SETTINGS,key); }
+function persistCfg(){ return saveSetting("cfg",cfg); }
+function persistDraft(){
+  clearTimeout(draftTimer);
+  draftTimer=setTimeout(()=>saveSetting("draft",{cur,editingId}).catch(()=>{}),250);
+}
+
+async function migrateLegacy(){
+  const done = await getSetting("legacyMigrated",false);
+  if (done) return 0;
+  let moved = 0;
+  const existing = await dbGetAll(STORE_RECORDS);
+  const legacyRecords = lsGet(LEGACY_LS_REC,[]);
+  if (!existing.length && Array.isArray(legacyRecords)) {
+    for (const r0 of legacyRecords){
+      const r = Object.assign(blank(),r0);
+      r.id = r.id || uid();
+      r.photoIds = Array.isArray(r.photoIds) ? r.photoIds : [];
+      await dbPut(STORE_RECORDS,r); moved++;
+    }
+  }
+  const legacyCfg = lsGet(LEGACY_LS_CFG,null);
+  if (legacyCfg && !(await dbGet(STORE_SETTINGS,"cfg"))) await saveSetting("cfg",legacyCfg);
+  const legacyDraft = lsGet(LEGACY_LS_DRAFT,null);
+  if (legacyDraft && !(await dbGet(STORE_SETTINGS,"draft"))) await saveSetting("draft",legacyDraft);
+  await saveSetting("legacyMigrated",true);
+  return moved;
+}
+
+function blank(){
+  return {no:"", species:"", life:"生存", site:"", use:"", near:"", land:"",
+    dbh:["","","","","",""], dbhH:"", deadStems:"", ht:"", dieback:"", cle:"",
+    liveHt:"", crownBase:"", cwNS:"", cwEW:"", missing:"",
+    c1:[], c2:[], c3:[], note:"", photo:"", photoIds:[], lat:"", lon:""};
+}
+
+function toast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("on");
+  clearTimeout(t._h); t._h = setTimeout(()=>t.classList.remove("on"), 2200);
+}
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function num(v){ const n = parseFloat(v); return isFinite(n) ? n : null; }
+
+/* ---------- judgement (Excelの数式と同じロジック) ---------- */
+function judge(r){
+  const m = r.c1.length, h = r.c2.length, e = r.c3.length;
+  let result;
+  if (r.life === "枯死") result = "枯死（撤去・安全確認）";
+  else if (!m && !h && !e) result = "概ね良好・異常なし";
+  else if (h) result = m ? "外観診断＋維持管理処置" : "外観診断が必要";
+  else if (m) result = "維持管理処置が必要";
+  else result = "生育環境・基盤の詳細確認";
+  return {m, h, e, result,
+    diag: r.life === "枯死" ? "対象外（枯死）" : (h ? "対象" : "対象外"),
+    base: e ? "対象" : "対象外"};
+}
+function missingFields(r){
+  const out = [];
+  if (!r.no) out.push("樹木番号");
+  if (!r.species) out.push("樹種");
+  if (num(r.dbh[0]) === null) out.push("DBH1");
+  if (num(r.ht) === null) out.push("樹高");
+  if (r.life !== "枯死"){
+    if (r.dieback === "") out.push("枝枯れ率");
+    if (r.cle === "") out.push("CLE");
+    if (cfg.mode === "B"){
+      if (num(r.liveHt) === null) out.push("生存部樹高");
+      if (num(r.crownBase) === null) out.push("樹冠基部高");
+      if (num(r.cwNS) === null) out.push("樹冠幅南北");
+      if (num(r.cwEW) === null) out.push("樹冠幅東西");
+      if (r.missing === "") out.push("樹冠欠損率");
+    }
+  }
+  return out;
+}
+
+/* ---------- entry view ---------- */
+function field(label, inner, hint){
+  return `<div class="f"><label>${esc(label)}</label><div class="c">${inner}</div></div>` +
+         (hint ? `<div class="hint">${esc(hint)}</div>` : "");
+}
+function sel(key, opts, val, blankLabel){
+  return `<select data-k="${key}"><option value="">${esc(blankLabel||"—")}</option>` +
+    opts.map(o=>`<option${o===val?" selected":""}>${esc(o)}</option>`).join("") + `</select>`;
+}
+function chipRow(key, values, val, cls, labelFn){
+  return `<div class="chips ${cls||""}" data-chip="${key}">` +
+    values.map(v=>`<button type="button" data-v="${v}" aria-pressed="${String(v)===String(val)}">${esc(labelFn ? labelFn(v) : v)}</button>`).join("") +
+    `</div>`;
+}
+function diebackLabel(v){
+  const n = Number(v);
+  if (n === 0) return "0%";
+  if (n === 100) return "100%";
+  return `約${n-2}～${Math.min(99,n+2)}%`;
+}
+function diebackSelect(val){
+  return `<select data-k="dieback"><option value="">— 選択 —</option>` +
+    CLASSES.map(v=>`<option value="${v}"${String(v)===String(val)?" selected":""}>${esc(diebackLabel(v))}</option>`).join("") +
+    `</select>`;
+}
+function block(id, title, bodyHtml, count){
+  const open = !(lsGet("treefield.collapsed."+id, false));
+  return `<section class="block${open?"":" collapsed"}" data-block="${id}">
+    <h2><span class="caret">▾</span>${esc(title)}${count!=null?`<span class="cnt">${count}</span>`:""}</h2>
+    <div class="body">${bodyHtml}</div></section>`;
+}
+function toggles(key, items, chosen){
+  return items.map(t=>`<button type="button" class="tg" data-tg="${key}" data-t="${esc(t)}" aria-pressed="${chosen.includes(t)?"true":"false"}">
+    <span class="mark">✓</span><span class="t">${esc(t)}</span></button>`).join("");
+}
+
+function renderEntry(){
+  const r = cur, dead = r.life === "枯死";
+  const B = cfg.mode === "B";
+  const stems = r.dbh.map((v,i)=>`<div><div class="lb">DBH${i+1} (cm)</div>
+      <input type="number" inputmode="decimal" step="0.1" data-k="dbh${i}" value="${esc(v)}"></div>`).join("");
+
+  let html = "";
+
+  html += block("cfg", "調査の設定",
+    field("調査モード", `<select data-k="cfgmode">
+        <option value="A"${cfg.mode==="A"?" selected":""}>A：炭素優先</option>
+        <option value="B"${cfg.mode==="B"?" selected":""}>B：生態系サービス標準</option></select>`) +
+    field("点検者", `<input type="text" data-k="cfgsurveyor" value="${esc(cfg.surveyor)}" placeholder="氏名">`) +
+    field("点検日", `<input type="date" data-k="cfgdate" value="${esc(cfg.date)}">`) +
+    field("番号の付け方", `<div style="display:flex;gap:8px">
+        <input type="text" data-k="cfgprefix" value="${esc(cfg.prefix)}" style="flex:0 0 40%" placeholder="K-">
+        <input type="number" data-k="cfgnext" value="${cfg.next}" style="flex:1" min="1"></div>`,
+      "保存するたびに連番が1つ進みます。番号は入力欄で直せます。"));
+
+  html += block("basic", "基本",
+    field("樹木番号", `<input type="text" data-k="no" value="${esc(r.no)}" placeholder="${esc(cfg.prefix + String(cfg.next).padStart(3,"0"))}">`) +
+    field("樹種（和名）", `<input type="text" data-k="species" list="dlSpecies" value="${esc(r.species)}" placeholder="入力または選択">`) +
+    field("生育状態", sel("life", LIFE, r.life)) +
+    field("立地区分", sel("site", SITE, r.site)) +
+    field("周辺利用", sel("use", USE, r.use)) +
+    field("近接対象", sel("near", NEAR, r.near)) +
+    field("土地利用", sel("land", LAND, r.land, "現地で分かれば"), "空欄なら台帳側で立地区分から自動で当てます。"));
+
+  let itree = `<div class="hint" style="padding-top:10px">DBHは地上1.37 m・0.1 cm単位。株立ちは大きい順に最大6幹。</div>
+    <div class="stems">${stems}</div>` +
+    field("DBH測定高 (m)", `<input type="number" inputmode="decimal" step="0.01" data-k="dbhH" value="${esc(r.dbhH)}" placeholder="1.37以外で測ったときだけ">`) +
+    field("枯死幹数", `<input type="number" inputmode="numeric" step="1" min="0" data-k="deadStems" value="${esc(r.deadStems)}">`) +
+    field("樹高 (m)", `<input type="number" inputmode="decimal" step="0.1" data-k="ht" value="${esc(r.ht)}">`);
+  if (dead){
+    itree += `<div class="hint" style="color:var(--amber)">枯死木なので枝枯れ率・CLE${B?"・樹冠4項目":""}は入力しません。取込時に自動で −1 / 100 が入ります。</div>`;
+  } else {
+    itree += field("枝枯れ率", diebackSelect(r.dieback), "画面では判定しやすい範囲を表示。保存・CSVではi-Tree標準の代表値（3, 8, 13…%）として記録します。生きた樹冠の中の枯死枝。下枝の自然な枯れ上がりは除く。") +
+             field("CLE (0〜5)", chipRow("cle", [0,1,2,3,4,5], r.cle), "上面1＋側面4のうち直射光を受ける面の数。");
+    if (B){
+      itree += field("生存部樹高 (m)", `<input type="number" inputmode="decimal" step="0.1" data-k="liveHt" value="${esc(r.liveHt)}">`) +
+        field("樹冠基部高 (m)", `<input type="number" inputmode="decimal" step="0.1" data-k="crownBase" value="${esc(r.crownBase)}">`) +
+        field("樹冠幅 南北 (m)", `<input type="number" inputmode="decimal" step="0.1" data-k="cwNS" value="${esc(r.cwNS)}">`) +
+        field("樹冠幅 東西 (m)", `<input type="number" inputmode="decimal" step="0.1" data-k="cwEW" value="${esc(r.cwEW)}">`) +
+        field("樹冠欠損率 (%)", chipRow("missing", CLASSES, r.missing, "wrap6"), "実測寸法で描いた外郭の内側で、枝葉がない割合。");
+    }
+  }
+  html += block("itree", "i-Tree 調査項目", itree);
+
+  html += block("c1", "① 利用・維持管理", toggles("c1", CHK1, r.c1), r.c1.length);
+  html += block("c2", "②③ 活力・樹体異常", toggles("c2", CHK2, r.c2), r.c2.length);
+  html += block("c3", "④ 生育環境・造成影響", toggles("c3", CHK3, r.c3), r.c3.length);
+
+  html += block("rec", "記録",
+    field("特記事項", `<textarea data-k="note" placeholder="測定位置を変えた理由、判定に迷った点など">${esc(r.note)}</textarea>`) +
+    field("写真", `<div class="photo-actions">
+        <button type="button" id="btnPhoto" class="save sec" style="padding:0 14px">カメラ／写真を追加</button>
+        <span style="font-size:13px;color:var(--ink2)">${(r.photoIds||[]).length}枚</span>
+        <input type="file" id="photoInput" accept="image/*" capture="environment" multiple hidden>
+      </div><div id="photoList" class="photo-list"></div><div class="storage-line">写真は通信なしでも端末内のIndexedDBに保存します。樹木保存時に写真No.を自動付与します。</div>`) +
+    field("写真No.", `<input type="text" data-k="photo" value="${esc(r.photo)}" placeholder="撮影写真は自動入力">`) +
+    field("位置", `<div style="display:flex;gap:8px;align-items:center">
+        <button type="button" id="btnGps" class="save sec" style="min-height:46px;padding:0 14px">現在地を取得</button>
+        <span style="font-size:13px;color:var(--ink2)" id="gpsTxt">${r.lat?esc(r.lat)+", "+esc(r.lon):"未取得"}</span></div>`,
+      "台帳の緯度・経度に貼る用です。木の真下で取得してください。"));
+
+  html += `<datalist id="dlSpecies">${SPECIES.map(s=>`<option>${esc(s)}</option>`).join("")}</datalist>`;
+  if (editingId) html += `<div class="note"><b>編集中</b>保存すると一覧の記録が上書きされます。</div>`;
+
+  document.getElementById("view-entry").innerHTML = html;
+  updateResult();
+  renderPhotoList();
+}
+
+function updateResult(){
+  const j = judge(cur), miss = missingFields(cur);
+  const ok = miss.length === 0;
+  document.getElementById("rl1").textContent = cur.no ? `${cur.no}　${j.result}` : j.result;
+  const pills = `<span class="pill ${ok?"ok":"warn"}">${ok?"入力充足":"未入力 "+miss.length}</span>` +
+    `<span class="pill ${j.h?"bad":"ok"}">外観診断 ${j.diag}</span>` +
+    `<span class="pill ${j.e?"warn":"ok"}">基盤 ${j.base}</span>`;
+  document.getElementById("rl2").innerHTML = pills + (ok ? `①${j.m} ②③${j.h} ④${j.e}` : esc(miss.join("・")));
+  document.getElementById("btnSave").disabled = !(cur.no || cfg.next) || !cur.species;
+  document.getElementById("cntBadge").textContent = records.length + "本";
+  persistDraft();
+}
+
+
+/* ---------- photos (IndexedDB / offline) ---------- */
+function cleanupPhotoUrls(){ photoUrls.forEach(u=>URL.revokeObjectURL(u)); photoUrls=[]; }
+function fmtBytes(n){
+  if (!Number.isFinite(n)) return "";
+  if (n < 1024*1024) return Math.max(1,Math.round(n/1024))+" KB";
+  return (n/1024/1024).toFixed(1)+" MB";
+}
+async function renderPhotoList(){
+  const el = document.getElementById("photoList"); if (!el || !idb) return;
+  cleanupPhotoUrls();
+  const ids = Array.isArray(cur.photoIds) ? cur.photoIds : (cur.photoIds=[]);
+  if (!ids.length){ el.innerHTML = ""; return; }
+  const cards=[];
+  for (let i=0;i<ids.length;i++){
+    const p=await dbGet(STORE_PHOTOS,ids[i]); if(!p) continue;
+    const u=URL.createObjectURL(p.blob); photoUrls.push(u);
+    cards.push(`<div class="photo-card"><img src="${u}" alt="樹木写真 ${i+1}">
+      <button type="button" class="pdel" data-photo-del="${esc(p.id)}" aria-label="写真を削除">×</button>
+      <div class="pm"><b>${esc(p.photoNo || "保存時に写真No.付与")}</b>${esc(fmtBytes(p.size||p.blob.size))}</div></div>`);
+  }
+  el.innerHTML=cards.join("");
+}
+async function addPhotos(files){
+  if (!idb || !files || !files.length) return;
+  cur.photoIds = Array.isArray(cur.photoIds) ? cur.photoIds : [];
+  for (const f of files){
+    if (!f.type || !f.type.startsWith("image/")){ toast("画像ファイルだけ追加できます"); continue; }
+    const id=uid();
+    await dbPut(STORE_PHOTOS,{id,recordId:editingId||null,treeNo:cur.no||"",photoNo:"",name:f.name||"photo",type:f.type,size:f.size,createdAt:new Date().toISOString(),blob:f});
+    cur.photoIds.push(id);
+  }
+  persistDraft(); await renderPhotoList(); await updateStorageBadge();
+  toast(`${files.length}枚を端末に保存しました`);
+}
+async function removePhoto(id){
+  await dbDelete(STORE_PHOTOS,id);
+  cur.photoIds=(cur.photoIds||[]).filter(x=>x!==id);
+  persistDraft(); await renderPhotoList(); await updateStorageBadge();
+}
+async function finalizePhotos(rec){
+  const ids=Array.isArray(rec.photoIds)?rec.photoIds:[];
+  const nos=[];
+  for(let i=0;i<ids.length;i++){
+    const p=await dbGet(STORE_PHOTOS,ids[i]); if(!p) continue;
+    p.recordId=rec.id; p.treeNo=rec.no; p.photoNo=`${rec.no}-${String(i+1).padStart(2,"0")}`; p.updatedAt=new Date().toISOString();
+    await dbPut(STORE_PHOTOS,p); nos.push(p.photoNo);
+  }
+  if(nos.length) rec.photo=nos.join(", ");
+}
+async function deleteRecordPhotos(r){
+  for(const id of (r.photoIds||[])) await dbDelete(STORE_PHOTOS,id);
+}
+async function updateStorageBadge(){
+  const b=document.getElementById("storeBadge"); if(!b) return;
+  try{
+    const persisted = navigator.storage && navigator.storage.persisted ? await navigator.storage.persisted() : false;
+    const est = navigator.storage && navigator.storage.estimate ? await navigator.storage.estimate() : null;
+    const used = est && Number.isFinite(est.usage) ? ` ${fmtBytes(est.usage)}` : "";
+    b.textContent = `端末保存${used}${persisted?" ✓":""}`;
+  }catch(e){ b.textContent="端末保存"; }
+}
+
+/* ---------- events ---------- */
+document.addEventListener("input", e=>{
+  const k = e.target.dataset.k; if (!k) return;
+  const v = e.target.value;
+  if (k.startsWith("cfg")){
+    const f = k.slice(3);
+    if (f === "next") cfg.next = Math.max(1, parseInt(v||"1",10));
+    else cfg[f === "mode" ? "mode" : f === "surveyor" ? "surveyor" : f === "date" ? "date" : "prefix"] = v;
+    persistCfg().catch(()=>{});
+    if (f === "mode") renderEntry();
+    return;
+  }
+  if (k.startsWith("dbh") && k.length === 4) cur.dbh[+k[3]] = v;
+  else cur[k] = v;
+  if (k === "life") renderEntry(); else updateResult();
+});
+document.addEventListener("click", e=>{
+  const h2 = e.target.closest("section.block>h2");
+  if (h2){
+    const s = h2.parentElement; s.classList.toggle("collapsed");
+    lsSet("treefield.collapsed."+s.dataset.block, s.classList.contains("collapsed"));
+    return;
+  }
+  const chip = e.target.closest("[data-chip] button");
+  if (chip){
+    const key = chip.parentElement.dataset.chip;
+    cur[key] = (String(cur[key]) === chip.dataset.v) ? "" : chip.dataset.v;
+    [...chip.parentElement.children].forEach(b=>b.setAttribute("aria-pressed", String(String(cur[key])===b.dataset.v)));
+    updateResult(); return;
+  }
+  const tg = e.target.closest(".tg");
+  if (tg){
+    const key = tg.dataset.tg, t = tg.dataset.t, arr = cur[key];
+    const i = arr.indexOf(t);
+    if (i >= 0) arr.splice(i,1); else arr.push(t);
+    tg.setAttribute("aria-pressed", String(i < 0));
+    const cnt = tg.closest("section.block").querySelector(".cnt");
+    if (cnt) cnt.textContent = arr.length;
+    updateResult(); return;
+  }
+  if (e.target.id === "btnPhoto") {
+    document.getElementById("photoInput")?.click(); return;
+  }
+  const pd = e.target.closest("[data-photo-del]");
+  if (pd){
+    if (confirm("この写真を端末から削除しますか？")) removePhoto(pd.dataset.photoDel); return;
+  }
+  if (e.target.id === "btnGps"){
+    if (!navigator.geolocation){ toast("この端末では位置を取得できません"); return; }
+    e.target.textContent = "取得中…";
+    navigator.geolocation.getCurrentPosition(p=>{
+      cur.lat = p.coords.latitude.toFixed(6); cur.lon = p.coords.longitude.toFixed(6);
+      document.getElementById("gpsTxt").textContent = cur.lat + ", " + cur.lon;
+      e.target.textContent = "現在地を取得"; updateResult();
+    }, ()=>{ e.target.textContent = "現在地を取得"; toast("位置を取得できませんでした"); },
+    {enableHighAccuracy:true, timeout:10000});
+  }
+});
+
+document.addEventListener("change", e=>{
+  if (e.target.id !== "photoInput" || !e.target.files?.length) return;
+  addPhotos([...e.target.files]).catch(()=>toast("写真を保存できませんでした"));
+  e.target.value = "";
+});
+
+document.getElementById("btnSave").addEventListener("click", async ()=>{
+  if (!cur.no) cur.no = cfg.prefix + String(cfg.next).padStart(3,"0");
+  const miss = missingFields(cur);
+  if (miss.length && !confirm("未入力があります：\n" + miss.join("、") + "\n\nこのまま保存しますか？")) return;
+  const dup = records.find(x => x.no === cur.no && x.id !== editingId);
+  if (dup && !confirm(`樹木番号 ${cur.no} は既にあります。別の記録として保存しますか？`)) return;
+
+  const rec = JSON.parse(JSON.stringify(cur));
+  rec.photoIds = Array.isArray(cur.photoIds) ? [...cur.photoIds] : [];
+  rec.mode = cfg.mode; rec.surveyor = cfg.surveyor; rec.date = cfg.date;
+  rec.updatedAt = new Date().toISOString();
+  const wasEditing = !!editingId;
+  if (editingId){
+    const old = records.find(x=>x.id===editingId);
+    rec.id = editingId; rec.createdAt = old?.createdAt || rec.updatedAt;
+  } else {
+    rec.id = uid(); rec.createdAt = rec.updatedAt;
+  }
+  await finalizePhotos(rec);
+  await dbPut(STORE_RECORDS,rec);
+  if (wasEditing){
+    records = records.map(x => x.id === rec.id ? rec : x);
+    editingId = null; toast("上書きしました");
+  } else {
+    records.push(rec); cfg.next = cfg.next + 1;
+    toast("保存しました（" + records.length + "本目）");
+  }
+  await persistCfg(); await deleteSetting("draft");
+  cur = blank();
+  renderEntry(); await updateStorageBadge();
+  window.scrollTo({top:0, behavior:"instant"});
+});
+
+async function discardDraft(){
+  const saved = editingId ? records.find(x=>x.id===editingId) : null;
+  const keep = new Set(saved?.photoIds || []);
+  for(const id of (cur.photoIds||[])){
+    if(!keep.has(id)) await dbDelete(STORE_PHOTOS,id);
+  }
+  cur=blank(); editingId=null; await deleteSetting("draft"); await updateStorageBadge();
+}
+
+/* ---------- list ---------- */
+function renderList(){
+  const v = document.getElementById("view-list");
+  if (!records.length){ v.innerHTML = `<div class="empty">まだ記録がありません。<br>「入力」タブから1本目を保存してください。</div>`; return; }
+  const rows = records.slice().reverse().map(r=>{
+    const j = judge(r), miss = missingFieldsFor(r);
+    return `<div class="card">
+      <div class="no">${esc(r.no)}</div>
+      <div class="meta"><b>${esc(r.species||"樹種未入力")}</b>　${esc(r.life)}<br>
+        ${esc(j.result)}<br>
+        <span class="pill ${miss.length?"warn":"ok"}">${miss.length?("未入力 "+miss.length):"入力充足"}</span>
+        <span style="font-size:12px">${esc(r.mode)}モード / ${esc(r.date||"")} / 写真 ${(r.photoIds||[]).length}枚</span></div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <button data-edit="${r.id}">編集</button>
+        <button data-del="${r.id}">削除</button></div>
+    </div>`;
+  }).join("");
+  v.innerHTML = `<div class="toolbar"><button id="btnNew" class="primary">新規入力へ</button></div>` + rows;
+}
+function missingFieldsFor(r){
+  const saved = cfg.mode; cfg.mode = r.mode || "A";
+  const out = missingFields(r); cfg.mode = saved; return out;
+}
+document.addEventListener("click", e=>{
+  const ed = e.target.dataset.edit, dl = e.target.dataset.del;
+  if (ed){
+    const r = records.find(x=>x.id===ed); if (!r) return;
+    cur = Object.assign(blank(),JSON.parse(JSON.stringify(r))); cur.photoIds=Array.isArray(r.photoIds)?[...r.photoIds]:[]; editingId = ed;
+    if (r.mode) { cfg.mode = r.mode; persistCfg().catch(()=>{}); }
+    show("entry"); renderEntry(); window.scrollTo({top:0});
+  }
+  if (dl){
+    const r = records.find(x=>x.id===dl); if (!r) return;
+    if (!confirm(`${r.no} を削除しますか？`)) return;
+    deleteRecordPhotos(r).then(()=>dbDelete(STORE_RECORDS,dl)).then(()=>{
+      records = records.filter(x=>x.id!==dl); renderList(); updateResult(); updateStorageBadge(); toast("削除しました");
+    }).catch(()=>toast("削除できませんでした"));
+  }
+  if (e.target.id === "btnNew"){
+    const hasDraft = !!(cur.species || cur.no || cur.note || (cur.photoIds||[]).length || cur.dbh.some(Boolean));
+    if (hasDraft && !confirm("現在の未保存入力を破棄して新規入力を始めますか？")) return;
+    discardDraft().then(()=>{ show("entry"); renderEntry(); });
+  }
+});
+
+/* ---------- export ---------- */
+const COLS_A = ["樹木番号","点検日","点検者","樹種（和名）","生育状態","樹木立地区分","周辺利用","近接対象","",
+  "胸高直径1(cm)","胸高直径2(cm)","胸高直径3(cm)","胸高直径4(cm)","胸高直径5(cm)","胸高直径6(cm)",
+  "DBH測定高(m)","枯死幹数","樹高(m)","枝枯れ率(%)","樹冠受光度（CLE 0〜5）","土地利用",""]
+  .concat(CHK1, [""], CHK2, [""], CHK3, ["","維持管理数","健全度異常数","生育環境数","点検結果","外観診断対象","基盤詳細確認","特記事項","写真No."]);
+const COLS_B = ["樹木番号","点検日","点検者","樹種（和名）","生育状態","樹木立地区分","周辺利用","近接対象","",
+  "胸高直径1(cm)","胸高直径2(cm)","胸高直径3(cm)","胸高直径4(cm)","胸高直径5(cm)","胸高直径6(cm)",
+  "DBH測定高(m)","枯死幹数","樹高(m)","枝枯れ率(%)","樹冠受光度（CLE 0〜5）","土地利用",
+  "生存部樹高(m)","樹冠基部高(m)","樹冠幅 南北(m)","樹冠幅 東西(m)","樹冠欠損率(%)",""]
+  .concat(CHK1, [""], CHK2, [""], CHK3, ["","維持管理数","健全度異常数","生育環境数","点検結果","外観診断対象","基盤詳細確認","特記事項","写真No."]);
+
+function rowFor(r){
+  const dead = r.life === "枯死";
+  const base = [r.no, r.date, r.surveyor, r.species, r.life, r.site, r.use, r.near, "",
+    r.dbh[0], r.dbh[1], r.dbh[2], r.dbh[3], r.dbh[4], r.dbh[5],
+    r.dbhH, r.deadStems, r.ht, dead ? "" : r.dieback, dead ? "" : r.cle, r.land];
+  const ext = (r.mode === "B")
+    ? [dead?"":r.liveHt, dead?"":r.crownBase, dead?"":r.cwNS, dead?"":r.cwEW, dead?"":r.missing, ""]
+    : [""];
+  const mark = (arr, list) => list.map(t => arr.includes(t) ? "○" : "");
+  const j = judge(r);
+  return base.concat(ext, mark(r.c1,CHK1), [""], mark(r.c2,CHK2), [""], mark(r.c3,CHK3), ["",
+    j.m, j.h, j.e, j.result, j.diag, j.base, r.note, r.photo]);
+}
+function toCSV(rows){
+  return rows.map(cols => cols.map(c=>{
+    const s = String(c==null?"":c);
+    return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
+  }).join(",")).join("\r\n");
+}
+function download(name, text){
+  const blob = new Blob(["\uFEFF"+text], {type:"text/csv;charset=utf-8"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+function renderOut(){
+  const nA = records.filter(r=>r.mode!=="B").length, nB = records.filter(r=>r.mode==="B").length;
+  const incomplete = records.filter(r=>missingFieldsFor(r).length).length;
+  document.getElementById("view-out").innerHTML = `
+    <div class="note"><b>Excelへの貼り付け方</b>
+      書き出したCSVを開き、データ行だけをコピーして、点検票の <b>B6</b> セルに貼り付けてください。
+      列の並びは点検票と同じで、区切り列も空欄で入っています。判定6列もExcelと同じロジックで出力するため、B6から連続して貼り付けられます。</div>
+    ${incomplete ? `<div class="err">未入力のある記録が ${incomplete} 件あります。書き出す前に一覧で確認してください。</div>` : ""}
+    <div class="toolbar">
+      <button id="expA" ${nA?"":"disabled"}>Aモード ${nA}本 をCSVで書き出す</button>
+      <button id="expB" ${nB?"":"disabled"}>Bモード ${nB}本 をCSVで書き出す</button>
+    </div>
+    <div class="toolbar">
+      <button id="expGps" ${records.some(r=>r.lat)?"":"disabled"}>緯度経度だけ書き出す（台帳用）</button>
+      <button id="expJson" ${records.length?"":"disabled"}>バックアップを保存（JSON）</button>
+    </div>
+    <div class="toolbar"><button id="impJson">バックアップを読み込む</button></div>
+    <div class="note"><b>オフライン保存について</b>
+      点検データと写真はIndexedDBに保存されます。通信がなくても入力・保存できます。JSONバックアップには写真本体は含まれません。
+      ブラウザの「サイトデータを削除」すると消えるため、作業の区切りごとにCSV/JSONも保存してください。</div>
+    <input type="file" id="fileJson" accept="application/json" hidden>`;
+}
+document.addEventListener("click", e=>{
+  const id = e.target.id;
+  const stamp = new Date().toISOString().slice(0,10).replace(/-/g,"");
+  if (id === "expA" || id === "expB"){
+    const mode = id === "expA" ? "A" : "B";
+    const rs = records.filter(r => (r.mode==="B") === (mode==="B"));
+    const cols = mode === "B" ? COLS_B : COLS_A;
+    download(`点検票貼付_${mode}モード_${stamp}.csv`, toCSV([cols].concat(rs.map(rowFor))));
+    toast("書き出しました");
+  }
+  if (id === "expGps"){
+    const rs = records.filter(r=>r.lat);
+    download(`緯度経度_${stamp}.csv`, toCSV([["樹木番号","緯度","経度"]].concat(rs.map(r=>[r.no,r.lat,r.lon]))));
+  }
+  if (id === "expJson"){
+    const blob = new Blob([JSON.stringify({cfg, records}, null, 1)], {type:"application/json"});
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+    a.download = `点検バックアップ_${stamp}.json`; document.body.appendChild(a); a.click();
+    setTimeout(()=>{URL.revokeObjectURL(a.href); a.remove();},500);
+  }
+  if (id === "impJson") document.getElementById("fileJson").click();
+});
+document.addEventListener("change", e=>{
+  if (e.target.id !== "fileJson" || !e.target.files[0]) return;
+  const fr = new FileReader();
+  fr.onload = () => {
+    try{
+      const d = JSON.parse(fr.result);
+      if (!Array.isArray(d.records)) throw 0;
+      const have = new Set(records.map(r=>r.id));
+      const add = d.records.filter(r=>!have.has(r.id)).map(r=>{ const x=Object.assign(blank(),r); x.photoIds=Array.isArray(r.photoIds)?r.photoIds:[]; return x; });
+      Promise.all(add.map(r=>dbPut(STORE_RECORDS,r))).then(()=>{
+        records = records.concat(add);
+        toast(`${add.length}件を読み込みました`); renderOut(); renderList(); updateResult();
+      });
+    }catch(err){ toast("このファイルは読み込めませんでした"); }
+  };
+  fr.readAsText(e.target.files[0]);
+});
+
+/* ---------- PWA / app shell offline ---------- */
+async function initPwa(){
+  if (navigator.storage && navigator.storage.persist) {
+    try{ await navigator.storage.persist(); }catch(e){}
+  }
+  if ("serviceWorker" in navigator && location.protocol !== "file:") {
+    try{
+      const reg = await navigator.serviceWorker.register("./sw.js",{scope:"./"});
+      reg.addEventListener("updatefound",()=>{
+        const w=reg.installing; if(!w) return;
+        w.addEventListener("statechange",()=>{ if(w.state==="installed" && navigator.serviceWorker.controller) toast("アプリ更新があります。再読み込みで反映します"); });
+      });
+    }catch(e){ toast("オフライン起動の準備に失敗しました"); }
+  }
+  await updateStorageBadge();
+}
+
+/* ---------- tabs ---------- */
+function show(which){
+  for (const t of ["entry","list","out"]){
+    document.getElementById("view-"+t).hidden = (t !== which);
+    document.getElementById("tab-"+t).setAttribute("aria-selected", String(t === which));
+  }
+  document.getElementById("resultbar").style.display = which === "entry" ? "" : "none";
+  document.body.style.paddingBottom = which === "entry" ? "132px" : "24px";
+  if (which === "list") renderList();
+  if (which === "out") renderOut();
+}
+["entry","list","out"].forEach(t=>document.getElementById("tab-"+t).addEventListener("click", ()=>show(t)));
+
+function netBadge(){
+  const b = document.getElementById("netBadge");
+  b.textContent = navigator.onLine ? "オンライン" : "オフライン（保存は可能）";
+  b.classList.toggle("off", !navigator.onLine);
+}
+window.addEventListener("online", netBadge); window.addEventListener("offline", netBadge);
+
+/* ---------- boot ---------- */
+async function boot(){
+  try{
+    idb = await openTreeDb();
+    const moved = await migrateLegacy();
+    cfg = Object.assign(cfg, await getSetting("cfg",{}));
+    records = (await dbGetAll(STORE_RECORDS)).map(r=>{ r.photoIds=Array.isArray(r.photoIds)?r.photoIds:[]; return r; });
+    const draft = await getSetting("draft",null);
+    if (draft && draft.cur){ cur = Object.assign(blank(),draft.cur); cur.photoIds=Array.isArray(draft.cur.photoIds)?draft.cur.photoIds:[]; editingId=draft.editingId||null; }
+    netBadge(); renderEntry(); await initPwa();
+    if(moved) toast(`旧版データ ${moved}件をIndexedDBへ移行しました`);
+  }catch(e){
+    console.error(e);
+    document.getElementById("view-entry").innerHTML='<div class="err"><b>端末保存を開始できません。</b><br>IndexedDBが利用できるブラウザで開いてください。Chrome / Edge / Safari の通常モードを推奨します。</div>';
+    document.getElementById("btnSave").disabled=true; netBadge();
+  }
+}
+boot();
+</script>
+</body>
+</html>

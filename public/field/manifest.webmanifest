@@ -1,0 +1,15 @@
+{
+  "name": "樹木点検 現地入力",
+  "short_name": "樹木点検",
+  "description": "Urban Forest Eco JP 現地樹木点検・i-Tree Eco調査入力",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#F1F4F0",
+  "theme_color": "#2F6B58",
+  "lang": "ja",
+  "icons": [
+    {"src":"./icon-192.png","sizes":"192x192","type":"image/png"},
+    {"src":"./icon-512.png","sizes":"512x512","type":"image/png"}
+  ]
+}
