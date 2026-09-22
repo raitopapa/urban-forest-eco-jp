@@ -311,7 +311,7 @@ function missingFields(r){
   if (!r.no) out.push("樹木番号");
   if (!r.species) out.push("樹種");
   if (num(r.dbh[0]) === null) out.push("DBH1");
-  if (num(r.ht) === null) out.push("全樹高");
+  if (num(r.ht) === null) out.push("樹高");
   if (r.life !== "枯死"){
     if (r.dieback === "") out.push("枝枯れ率");
     if (r.cle === "") out.push("CLE");
@@ -394,7 +394,7 @@ function renderEntry(){
     <div class="stems">${stems}</div>` +
     field("DBH測定高 (m)", `<input type="number" inputmode="decimal" step="0.01" data-k="dbhH" value="${esc(r.dbhH)}" placeholder="1.37以外で測ったときだけ">`) +
     field("枯死幹数", `<input type="number" inputmode="numeric" step="1" min="0" data-k="deadStems" value="${esc(r.deadStems)}">`) +
-    field("全樹高 (m)", `<input type="number" inputmode="decimal" step="0.1" data-k="ht" value="${esc(r.ht)}">`);
+    field("樹高 (m)", `<input type="number" inputmode="decimal" step="0.1" data-k="ht" value="${esc(r.ht)}">`);
   if (dead){
     itree += `<div class="hint" style="color:var(--amber)">枯死木なので枝枯れ率・CLE${B?"・樹冠4項目":""}は入力しません。取込時に自動で −1 / 100 が入ります。</div>`;
   } else {
@@ -666,11 +666,11 @@ document.addEventListener("click", e=>{
 /* ---------- export ---------- */
 const COLS_A = ["樹木番号","点検日","点検者","樹種（和名）","生育状態","樹木立地区分","周辺利用","近接対象","",
   "胸高直径1(cm)","胸高直径2(cm)","胸高直径3(cm)","胸高直径4(cm)","胸高直径5(cm)","胸高直径6(cm)",
-  "DBH測定高(m)","枯死幹数","樹高（全高）(m)","枝枯れ率(%)","樹冠受光度（CLE 0〜5）","土地利用",""]
+  "DBH測定高(m)","枯死幹数","樹高(m)","枝枯れ率(%)","樹冠受光度（CLE 0〜5）","土地利用",""]
   .concat(CHK1, [""], CHK2, [""], CHK3, ["","維持管理数","健全度異常数","生育環境数","点検結果","外観診断対象","基盤詳細確認","特記事項","写真No."]);
 const COLS_B = ["樹木番号","点検日","点検者","樹種（和名）","生育状態","樹木立地区分","周辺利用","近接対象","",
   "胸高直径1(cm)","胸高直径2(cm)","胸高直径3(cm)","胸高直径4(cm)","胸高直径5(cm)","胸高直径6(cm)",
-  "DBH測定高(m)","枯死幹数","樹高（全高）(m)","枝枯れ率(%)","樹冠受光度（CLE 0〜5）","土地利用",
+  "DBH測定高(m)","枯死幹数","樹高(m)","枝枯れ率(%)","樹冠受光度（CLE 0〜5）","土地利用",
   "生存部樹高(m)","樹冠基部高(m)","樹冠幅 南北(m)","樹冠幅 東西(m)","樹冠欠損率(%)",""]
   .concat(CHK1, [""], CHK2, [""], CHK3, ["","維持管理数","健全度異常数","生育環境数","点検結果","外観診断対象","基盤詳細確認","特記事項","写真No."]);
 
