@@ -123,4 +123,151 @@ input:focus,select:focus,textarea:focus{outline:3px solid #9BC2B4;outline-offset
 .note b{display:block;margin-bottom:4px}
 .err{background:var(--red-bg);border:1px solid #E8B7B3;color:var(--red);border-radius:var(--r);padding:10px 14px;font-size:14px;margin-bottom:12px}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:150px;z-index:60;background:var(--ink);color:#fff;
-  padding:12px 20px;border-radius:999px;font-size:15px;font-weight:600;opa
+  padding:12px 20px;border-radius:999px;font-size:15px;font-weight:600;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.on{opacity:1}
+
+/* ---- offline / photos ---- */
+.photo-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.photo-actions button{min-height:52px}
+.photo-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px}
+.photo-card{position:relative;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:var(--field)}
+.photo-card img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;background:#DCE4DF}
+.photo-card .pm{padding:7px 8px;font-size:12px;color:var(--ink2);line-height:1.35}
+.photo-card .pm b{display:block;color:var(--ink);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.photo-card .pdel{position:absolute;right:6px;top:6px;min-width:44px;min-height:44px;border:0;border-radius:8px;background:rgba(20,35,28,.82);color:#fff;font-weight:700}
+.storage-line{font-size:12px;color:var(--ink2);margin-top:7px}
+@media (min-width:640px){.photo-list{grid-template-columns:repeat(3,minmax(0,1fr))}}
+
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hrow">
+    <div class="htitle">樹木点検 現地入力</div>
+    <span class="badge" id="netBadge">オンライン</span>
+    <span class="badge" id="cntBadge">0本</span>
+    <span class="badge" id="storeBadge">端末保存</span>
+  </div>
+  <div class="tabs" role="tablist">
+    <button role="tab" id="tab-entry" aria-selected="true">入力</button>
+    <button role="tab" id="tab-list" aria-selected="false">一覧</button>
+    <button role="tab" id="tab-out" aria-selected="false">書き出し</button>
+  </div>
+</header>
+
+<main>
+  <div id="view-entry"></div>
+  <div id="view-list" hidden></div>
+  <div id="view-out" hidden></div>
+</main>
+
+<div class="resultbar" id="resultbar">
+  <div class="rgrid">
+    <div class="rtext">
+      <div class="rline1" id="rl1">樹木番号と樹種を入れてください</div>
+      <div class="rline2" id="rl2"></div>
+    </div>
+    <button class="save" id="btnSave" disabled>保存</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+
+const SPECIES = ["ケヤキ","イチョウ","ソメイヨシノ","ヤマザクラ","クスノキ","ハナミズキ","ヤマボウシ","トウカエデ","イロハモミジ","プラタナス（モミジバスズカケノキ）","トチノキ","ユリノキ","エンジュ","シラカシ","アラカシ","マテバシイ","スダジイ","コナラ","クヌギ","ムクノキ","エノキ","アキニレ","ハルニレ","コブシ","ハクモクレン","タイサンボク","サルスベリ","ナンキンハゼ","モクセイ（キンモクセイ）","クロガネモチ","モチノキ","ソヨゴ","ヤマモモ","シマトネリコ","ケヤマハンノキ","シダレヤナギ","ポプラ（セイヨウハコヤナギ）","メタセコイア","ラクウショウ","ヒマラヤスギ","クロマツ","アカマツ","スギ","ヒノキ","イヌマキ","カイヅカイブキ","ツバキ（ヤブツバキ）","サザンカ","ハナカイドウ","ウメ"];
+const LIFE = ["生存","枯死","切株","不明"];
+const SITE = ["公園・広場","住宅周辺緑地","通路・園路沿い","駐車場周辺","道路沿い","施設敷地内緑地","その他"];
+const USE  = ["低","中","高","不明"];
+const NEAR = ["なし","建物","通路・園路","道路","駐車場","遊具・ベンチ","照明・設備","塀・擁壁","架線","その他"];
+const LAND = ["住宅","集合住宅","商業・業務","工業","道路・交通","公園・緑地","公共施設","農地","空地","その他"];
+const CLASSES = [0,3,8,13,18,23,28,33,38,43,48,53,58,63,68,73,78,83,88,93,98,100];
+
+const CHK1 = ["利用空間への支障","建物・設備・構造物との競合","支柱・保護資材の異常/不要残置","太枝枯れ・折れ・ぶら下がり","根上がり・園路/舗装等への支障","樹冠の偏在・越境・強剪定"];
+const CHK2 = ["葉の状態","先端枝の枯れ","枯死・著しい衰弱","キノコの有無","開口空洞","樹皮枯死・欠損・腐朽","裂け・亀裂・接合部異常","病虫害","根元・根株の異常","揺れ","不自然な傾斜"];
+const CHK3 = ["土壌踏圧・固結・過度な被覆","盛土・深植え・根元埋没","掘削・根切り・造成/工事損傷","排水不良・過湿/著しい乾燥","根系空間不足・植栽基盤狭小"];
+
+const LEGACY_LS_REC = "treefield.records.v1";
+const LEGACY_LS_CFG = "treefield.config.v1";
+const LEGACY_LS_DRAFT = "treefield.draft.v1";
+const DB_NAME = "treefield.db";
+const DB_VERSION = 1;
+const STORE_RECORDS = "records";
+const STORE_PHOTOS = "photos";
+const STORE_SETTINGS = "settings";
+const STORE_SYNC = "syncQueue";
+
+let cfg = {mode:"A", surveyor:"", date:new Date().toISOString().slice(0,10), prefix:"K-", next:1};
+let records = [];
+let cur = blank();
+let editingId = null;
+let idb = null;
+let draftTimer = null;
+let photoUrls = [];
+
+// localStorageは、折りたたみ状態と旧版データの移行元にだけ使用する。
+function lsGet(k, fb){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : fb; }catch(e){ return fb; } }
+function lsSet(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+function uid(){ return (crypto.randomUUID ? crypto.randomUUID() : Date.now()+"-"+Math.random().toString(36).slice(2)); }
+
+function openTreeDb(){
+  return new Promise((resolve,reject)=>{
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = () => {
+      const d = req.result;
+      if (!d.objectStoreNames.contains(STORE_RECORDS)) d.createObjectStore(STORE_RECORDS,{keyPath:"id"});
+      if (!d.objectStoreNames.contains(STORE_SETTINGS)) d.createObjectStore(STORE_SETTINGS,{keyPath:"key"});
+      if (!d.objectStoreNames.contains(STORE_SYNC)) d.createObjectStore(STORE_SYNC,{keyPath:"id"});
+      if (!d.objectStoreNames.contains(STORE_PHOTOS)) {
+        const s = d.createObjectStore(STORE_PHOTOS,{keyPath:"id"});
+        s.createIndex("recordId","recordId",{unique:false});
+        s.createIndex("treeNo","treeNo",{unique:false});
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error || new Error("IndexedDBを開けません"));
+  });
+}
+function idbReq(store, mode, fn){
+  return new Promise((resolve,reject)=>{
+    const tx = idb.transaction(store,mode), os = tx.objectStore(store);
+    let req, result, failed=false;
+    try{ req = fn(os); }catch(e){ reject(e); return; }
+    req.onsuccess = () => { result=req.result; };
+    req.onerror = () => { failed=true; reject(req.error); };
+    tx.oncomplete = () => { if(!failed) resolve(result); };
+    tx.onerror = () => { if(!failed){ failed=true; reject(tx.error || new Error("保存処理に失敗しました")); } };
+    tx.onabort = () => { if(!failed){ failed=true; reject(tx.error || new Error("保存処理が中断されました")); } };
+  });
+}
+function dbGet(store,key){ return idbReq(store,"readonly",os=>os.get(key)); }
+function dbGetAll(store){ return idbReq(store,"readonly",os=>os.getAll()); }
+function dbPut(store,value){ return idbReq(store,"readwrite",os=>os.put(value)); }
+function dbDelete(store,key){ return idbReq(store,"readwrite",os=>os.delete(key)); }
+async function getSetting(key,fb){ const x=await dbGet(STORE_SETTINGS,key); return x ? x.value : fb; }
+function saveSetting(key,value){ return dbPut(STORE_SETTINGS,{key,value,updatedAt:new Date().toISOString()}); }
+function deleteSetting(key){ return dbDelete(STORE_SETTINGS,key); }
+function persistCfg(){ return saveSetting("cfg",cfg); }
+function persistDraft(){
+  clearTimeout(draftTimer);
+  draftTimer=setTimeout(()=>saveSetting("draft",{cur,editingId}).catch(()=>{}),250);
+}
+
+async function migrateLegacy(){
+  const done = await getSetting("legacyMigrated",false);
+  if (done) return 0;
+  let moved = 0;
+  const existing = await dbGetAll(STORE_RECORDS);
+  const legacyRecords = lsGet(LEGACY_LS_REC,[]);
+  if (!existing.length && Array.isArray(legacyRecords)) {
+    for (const r0 of legacyRecords){
+      const r = Object.assign(blank(),r0);
+      r.id = r.id || uid();
+      r.photoIds = Array.isArray(r.photoIds) ? r.photoIds : [];
+      await dbPut(STORE_RECORDS,r); moved++;
+    }
+  }
+  const legacyCfg = lsGet(LEGACY_LS_C
