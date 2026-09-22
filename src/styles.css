@@ -11,7 +11,7 @@ h1, h2, h3, p { margin-top: 0; }
 .eyebrow { margin: 0; color: #799184; font-size: 10px; font-weight: 800; letter-spacing: .15em; }
 .app-header .eyebrow { color: #9db2a6; }
 .header-actions { margin-left: auto; display: flex; gap: 9px; }
-.button { min-height: 40px; padding: 0 16px; border: 0; border-radius: 5px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; font-weight: 700; }
+.button { min-height: 40px; padding: 0 16px; border: 0; border-radius: 5px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; font-weight: 700; text-decoration: none; }
 .button.primary { color: #17372a; background: #d9b66c; }.button.secondary { color: #eef2ee; background: transparent; border: 1px solid #607a6c; }.button.export { color: #fff; background: #2d7350; }.button:disabled { opacity: .45; cursor: not-allowed; }
 main { padding: 16px 22px 24px; }
 .stats { display: grid; grid-template-columns: repeat(4, minmax(110px, 1fr)) minmax(220px, 1.6fr); gap: 10px; margin-bottom: 12px; }
