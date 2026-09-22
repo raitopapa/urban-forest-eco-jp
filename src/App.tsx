@@ -44,7 +44,7 @@ export default function App() {
       <header className="app-header">
         <div className="brand-mark" aria-hidden="true">年輪</div>
         <div><p className="eyebrow">URBAN TREE INVENTORY</p><h1>Urban Forest Eco JP <span>MVP</span></h1></div>
-        <div className="header-actions"><button className="button secondary" onClick={restoreSample}>サンプルに戻す</button><label className="button primary">CSVを読み込む<input ref={inputRef} type="file" accept=".csv,text/csv" onChange={(event) => handleFile(event.target.files?.[0])} hidden /></label></div>
+        <div className="header-actions"><a className="button secondary" href="./field/">現地入力</a><button className="button secondary" onClick={restoreSample}>サンプルに戻す</button><label className="button primary">CSVを読み込む<input ref={inputRef} type="file" accept=".csv,text/csv" onChange={(event) => handleFile(event.target.files?.[0])} hidden /></label></div>
       </header>
       <main>
         <section className="stats" aria-label="台帳集計">
