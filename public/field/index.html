@@ -702,4 +702,121 @@ function download(name, text){
 }
 function renderOut(){
   const nA = records.filter(r=>r.mode!=="B").length, nB = records.filter(r=>r.mode==="B").length;
-  const incomplete = reco
+  const incomplete = records.filter(r=>missingFieldsFor(r).length).length;
+  document.getElementById("view-out").innerHTML = `
+    <div class="note"><b>Excelへの貼り付け方</b>
+      書き出したCSVを開き、データ行だけをコピーして、点検票の <b>B6</b> セルに貼り付けてください。
+      列の並びは点検票と同じで、区切り列も空欄で入っています。判定6列もExcelと同じロジックで出力するため、B6から連続して貼り付けられます。</div>
+    ${incomplete ? `<div class="err">未入力のある記録が ${incomplete} 件あります。書き出す前に一覧で確認してください。</div>` : ""}
+    <div class="toolbar">
+      <button id="expA" ${nA?"":"disabled"}>Aモード ${nA}本 をCSVで書き出す</button>
+      <button id="expB" ${nB?"":"disabled"}>Bモード ${nB}本 をCSVで書き出す</button>
+    </div>
+    <div class="toolbar">
+      <button id="expGps" ${records.some(r=>r.lat)?"":"disabled"}>緯度経度だけ書き出す（台帳用）</button>
+      <button id="expJson" ${records.length?"":"disabled"}>バックアップを保存（JSON）</button>
+    </div>
+    <div class="toolbar"><button id="impJson">バックアップを読み込む</button></div>
+    <div class="note"><b>オフライン保存について</b>
+      点検データと写真はIndexedDBに保存されます。通信がなくても入力・保存できます。JSONバックアップには写真本体は含まれません。
+      ブラウザの「サイトデータを削除」すると消えるため、作業の区切りごとにCSV/JSONも保存してください。</div>
+    <input type="file" id="fileJson" accept="application/json" hidden>`;
+}
+document.addEventListener("click", e=>{
+  const id = e.target.id;
+  const stamp = new Date().toISOString().slice(0,10).replace(/-/g,"");
+  if (id === "expA" || id === "expB"){
+    const mode = id === "expA" ? "A" : "B";
+    const rs = records.filter(r => (r.mode==="B") === (mode==="B"));
+    const cols = mode === "B" ? COLS_B : COLS_A;
+    download(`点検票貼付_${mode}モード_${stamp}.csv`, toCSV([cols].concat(rs.map(rowFor))));
+    toast("書き出しました");
+  }
+  if (id === "expGps"){
+    const rs = records.filter(r=>r.lat);
+    download(`緯度経度_${stamp}.csv`, toCSV([["樹木番号","緯度","経度"]].concat(rs.map(r=>[r.no,r.lat,r.lon]))));
+  }
+  if (id === "expJson"){
+    const blob = new Blob([JSON.stringify({cfg, records}, null, 1)], {type:"application/json"});
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+    a.download = `点検バックアップ_${stamp}.json`; document.body.appendChild(a); a.click();
+    setTimeout(()=>{URL.revokeObjectURL(a.href); a.remove();},500);
+  }
+  if (id === "impJson") document.getElementById("fileJson").click();
+});
+document.addEventListener("change", e=>{
+  if (e.target.id !== "fileJson" || !e.target.files[0]) return;
+  const fr = new FileReader();
+  fr.onload = () => {
+    try{
+      const d = JSON.parse(fr.result);
+      if (!Array.isArray(d.records)) throw 0;
+      const have = new Set(records.map(r=>r.id));
+      const add = d.records.filter(r=>!have.has(r.id)).map(r=>{ const x=Object.assign(blank(),r); x.photoIds=Array.isArray(r.photoIds)?r.photoIds:[]; return x; });
+      Promise.all(add.map(r=>dbPut(STORE_RECORDS,r))).then(()=>{
+        records = records.concat(add);
+        toast(`${add.length}件を読み込みました`); renderOut(); renderList(); updateResult();
+      });
+    }catch(err){ toast("このファイルは読み込めませんでした"); }
+  };
+  fr.readAsText(e.target.files[0]);
+});
+
+/* ---------- PWA / app shell offline ---------- */
+async function initPwa(){
+  if (navigator.storage && navigator.storage.persist) {
+    try{ await navigator.storage.persist(); }catch(e){}
+  }
+  if ("serviceWorker" in navigator && location.protocol !== "file:") {
+    try{
+      const reg = await navigator.serviceWorker.register("./sw.js",{scope:"./"});
+      reg.addEventListener("updatefound",()=>{
+        const w=reg.installing; if(!w) return;
+        w.addEventListener("statechange",()=>{ if(w.state==="installed" && navigator.serviceWorker.controller) toast("アプリ更新があります。再読み込みで反映します"); });
+      });
+    }catch(e){ toast("オフライン起動の準備に失敗しました"); }
+  }
+  await updateStorageBadge();
+}
+
+/* ---------- tabs ---------- */
+function show(which){
+  for (const t of ["entry","list","out"]){
+    document.getElementById("view-"+t).hidden = (t !== which);
+    document.getElementById("tab-"+t).setAttribute("aria-selected", String(t === which));
+  }
+  document.getElementById("resultbar").style.display = which === "entry" ? "" : "none";
+  document.body.style.paddingBottom = which === "entry" ? "132px" : "24px";
+  if (which === "list") renderList();
+  if (which === "out") renderOut();
+}
+["entry","list","out"].forEach(t=>document.getElementById("tab-"+t).addEventListener("click", ()=>show(t)));
+
+function netBadge(){
+  const b = document.getElementById("netBadge");
+  b.textContent = navigator.onLine ? "オンライン" : "オフライン（保存は可能）";
+  b.classList.toggle("off", !navigator.onLine);
+}
+window.addEventListener("online", netBadge); window.addEventListener("offline", netBadge);
+
+/* ---------- boot ---------- */
+async function boot(){
+  try{
+    idb = await openTreeDb();
+    const moved = await migrateLegacy();
+    cfg = Object.assign(cfg, await getSetting("cfg",{}));
+    records = (await dbGetAll(STORE_RECORDS)).map(r=>{ r.photoIds=Array.isArray(r.photoIds)?r.photoIds:[]; return r; });
+    const draft = await getSetting("draft",null);
+    if (draft && draft.cur){ cur = Object.assign(blank(),draft.cur); cur.photoIds=Array.isArray(draft.cur.photoIds)?draft.cur.photoIds:[]; editingId=draft.editingId||null; }
+    netBadge(); renderEntry(); await initPwa();
+    if(moved) toast(`旧版データ ${moved}件をIndexedDBへ移行しました`);
+  }catch(e){
+    console.error(e);
+    document.getElementById("view-entry").innerHTML='<div class="err"><b>端末保存を開始できません。</b><br>IndexedDBが利用できるブラウザで開いてください。Chrome / Edge / Safari の通常モードを推奨します。</div>';
+    document.getElementById("btnSave").disabled=true; netBadge();
+  }
+}
+boot();
+</script>
+</body>
+</html>
