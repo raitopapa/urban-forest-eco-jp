@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>樹木点検 現地入力 | Urban Forest Eco JP</title>
+<title>全木点検（スクリーニング） 現地入力 | Urban Forest Eco JP</title>
 <meta name="theme-color" content="#2F6B58">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -145,7 +145,7 @@ input:focus,select:focus,textarea:focus{outline:3px solid #9BC2B4;outline-offset
 
 <header>
   <div class="hrow">
-    <div class="htitle">樹木点検 現地入力</div>
+    <div class="htitle">全木点検（スクリーニング）</div>
     <span class="badge" id="netBadge">オンライン</span>
     <span class="badge" id="cntBadge">0本</span>
     <span class="badge" id="storeBadge">端末保存</span>
@@ -441,9 +441,12 @@ function renderEntry(){
     html += `<div class="note"><b>i-Tree評価なし</b>DBH・樹高・枝枯れ率・CLE・樹冠計測など、i-Tree専用の調査項目は非表示です。通常の樹木点検項目のみ記録します。</div>`;
   }
 
-  html += block("c1", "① 利用・維持管理", toggles("c1", CHK1, r.c1), r.c1.length);
-  html += block("c2", "②③ 活力・樹体異常", toggles("c2", CHK2, r.c2), r.c2.length);
-  html += block("c3", "④ 生育環境・造成影響", toggles("c3", CHK3, r.c3), r.c3.length);
+  html += `<div class="note"><b>全木点検（スクリーニング）</b>
+    区域内の対象木を全数確認し、維持管理処置が必要な木と、次工程の外観診断へ回す木を抽出します。
+    この画面で行う点検自体は「外観診断」ではありません。東京都「樹木点検」をベースに、街区向け項目を追加しています。</div>`;
+  html += block("c1", "① 利用・維持管理｜スクリーニング", toggles("c1", CHK1, r.c1), r.c1.length);
+  html += block("c2", "②③ 健全状態｜外観診断対象の抽出", toggles("c2", CHK2, r.c2), r.c2.length);
+  html += block("c3", "④ 生育環境・造成影響｜街区向け追加", toggles("c3", CHK3, r.c3), r.c3.length);
 
   html += block("rec", "記録",
     field("特記事項", `<textarea data-k="note" placeholder="測定位置を変えた理由、判定に迷った点など">${esc(r.note)}</textarea>`) +
@@ -470,7 +473,7 @@ function updateResult(){
   const ok = miss.length === 0;
   document.getElementById("rl1").textContent = cur.no ? `${cur.no}　${j.result}` : j.result;
   const pills = `<span class="pill ${ok?"ok":"warn"}">${ok?"入力充足":"未入力 "+miss.length}</span>` +
-    `<span class="pill ${j.h?"bad":"ok"}">外観診断 ${j.diag}</span>` +
+    `<span class="pill ${j.h?"bad":"ok"}">次工程：外観診断 ${j.diag}</span>` +
     `<span class="pill ${j.e?"warn":"ok"}">基盤 ${j.base}</span>`;
   document.getElementById("rl2").innerHTML = pills + (ok ? `①${j.m} ②③${j.h} ④${j.e}` : esc(miss.join("・")));
   document.getElementById("btnSave").disabled = !(cur.no || cfg.next) || !cur.species || cur.species === "__OTHER__";
@@ -706,14 +709,14 @@ document.addEventListener("click", e=>{
 const COLS_A = ["樹木番号","点検日","点検者","樹種（和名）","生育状態","樹木立地区分","周辺利用","近接対象","",
   "胸高直径1(cm)","胸高直径2(cm)","胸高直径3(cm)","胸高直径4(cm)","胸高直径5(cm)","胸高直径6(cm)",
   "DBH測定高(m)","枯死幹数","樹高(m)","枝枯れ率(%)","樹冠受光度（CLE 0〜5）","土地利用",""]
-  .concat(CHK1, [""], CHK2, [""], CHK3, ["","維持管理数","健全度異常数","生育環境数","点検結果","外観診断対象","基盤詳細確認","特記事項","写真No."]);
+  .concat(CHK1, [""], CHK2, [""], CHK3, ["","維持管理数","健全度異常数","生育環境数","全木点検結果","外観診断対象","基盤詳細確認","特記事項","写真No."]);
 const COLS_B = ["樹木番号","点検日","点検者","樹種（和名）","生育状態","樹木立地区分","周辺利用","近接対象","",
   "胸高直径1(cm)","胸高直径2(cm)","胸高直径3(cm)","胸高直径4(cm)","胸高直径5(cm)","胸高直径6(cm)",
   "DBH測定高(m)","枯死幹数","樹高(m)","枝枯れ率(%)","樹冠受光度（CLE 0〜5）","土地利用",
   "生存部樹高(m)","樹冠基部高(m)","樹冠幅 南北(m)","樹冠幅 東西(m)","樹冠欠損率(%)",""]
-  .concat(CHK1, [""], CHK2, [""], CHK3, ["","維持管理数","健全度異常数","生育環境数","点検結果","外観診断対象","基盤詳細確認","特記事項","写真No."]);
+  .concat(CHK1, [""], CHK2, [""], CHK3, ["","維持管理数","健全度異常数","生育環境数","全木点検結果","外観診断対象","基盤詳細確認","特記事項","写真No."]);
 const COLS_N = ["評価区分","樹木番号","点検日","点検者","樹種（和名）","生育状態","樹木立地区分","周辺利用","近接対象",""]
-  .concat(CHK1, [""], CHK2, [""], CHK3, ["","維持管理数","健全度異常数","生育環境数","点検結果","外観診断対象","基盤詳細確認","特記事項","写真No."]);
+  .concat(CHK1, [""], CHK2, [""], CHK3, ["","維持管理数","健全度異常数","生育環境数","全木点検結果","外観診断対象","基盤詳細確認","特記事項","写真No."]);
 
 function rowFor(r){
   const dead = r.life === "枯死";
