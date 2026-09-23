@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>全木点検（スクリーニング） 現地入力 | Urban Forest Eco JP</title>
+<title>全木点検 現地入力 | Urban Forest Eco JP</title>
 <meta name="theme-color" content="#2F6B58">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -136,6 +136,7 @@ input:focus,select:focus,textarea:focus{outline:3px solid #9BC2B4;outline-offset
 .photo-card .pm b{display:block;color:var(--ink);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .photo-card .pdel{position:absolute;right:6px;top:6px;min-width:44px;min-height:44px;border:0;border-radius:8px;background:rgba(20,35,28,.82);color:#fff;font-weight:700}
 .storage-line{font-size:12px;color:var(--ink2);margin-top:7px}
+.source-note{font-size:11px;line-height:1.45;color:var(--ink2);padding:8px 4px 2px}.source-note a{color:inherit;text-decoration:underline}
 @media (min-width:640px){.photo-list{grid-template-columns:repeat(3,minmax(0,1fr))}}
 
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
@@ -145,7 +146,7 @@ input:focus,select:focus,textarea:focus{outline:3px solid #9BC2B4;outline-offset
 
 <header>
   <div class="hrow">
-    <div class="htitle">全木点検（スクリーニング）</div>
+    <div class="htitle">全木点検</div>
     <span class="badge" id="netBadge">オンライン</span>
     <span class="badge" id="cntBadge">0本</span>
     <span class="badge" id="storeBadge">端末保存</span>
@@ -441,12 +442,9 @@ function renderEntry(){
     html += `<div class="note"><b>i-Tree評価なし</b>DBH・樹高・枝枯れ率・CLE・樹冠計測など、i-Tree専用の調査項目は非表示です。通常の樹木点検項目のみ記録します。</div>`;
   }
 
-  html += `<div class="note"><b>全木点検（スクリーニング）</b>
-    区域内の対象木を全数確認し、維持管理処置が必要な木と、次工程の外観診断へ回す木を抽出します。
-    この画面で行う点検自体は「外観診断」ではありません。東京都「樹木点検」をベースに、街区向け項目を追加しています。</div>`;
-  html += block("c1", "① 利用・維持管理｜スクリーニング", toggles("c1", CHK1, r.c1), r.c1.length);
-  html += block("c2", "②③ 健全状態｜外観診断対象の抽出", toggles("c2", CHK2, r.c2), r.c2.length);
-  html += block("c3", "④ 生育環境・造成影響｜街区向け追加", toggles("c3", CHK3, r.c3), r.c3.length);
+  html += block("c1", "① 利用・維持管理", toggles("c1", CHK1, r.c1), r.c1.length);
+  html += block("c2", "②③ 健全状態", toggles("c2", CHK2, r.c2), r.c2.length);
+  html += block("c3", "④ 生育環境・造成影響", toggles("c3", CHK3, r.c3), r.c3.length);
 
   html += block("rec", "記録",
     field("特記事項", `<textarea data-k="note" placeholder="測定位置を変えた理由、判定に迷った点など">${esc(r.note)}</textarea>`) +
@@ -459,7 +457,8 @@ function renderEntry(){
     field("位置", `<div style="display:flex;gap:8px;align-items:center">
         <button type="button" id="btnGps" class="save sec" style="min-height:46px;padding:0 14px">現在地を取得</button>
         <span style="font-size:13px;color:var(--ink2)" id="gpsTxt">${r.lat?esc(r.lat)+", "+esc(r.lon):"未取得"}</span></div>`,
-      "台帳の緯度・経度に貼る用です。木の真下で取得してください。"));
+      "台帳の緯度・経度に貼る用です。木の真下で取得してください。")) +
+    `<div class="source-note">外観診断要否のスクリーニングを兼ねた i-Tree 評価用の調査。点検項目は東京都建設局「令和3年度 街路樹診断等マニュアル」第Ⅱ章「樹木点検」をベースに街区向けに調整。 <a href="https://www.kensetsu.metro.tokyo.lg.jp/park/ryokuka/hyoushi/hyoushi7-1" target="_blank" rel="noopener">東京都建設局：街路樹診断等マニュアル</a></div>`;
 
   if (editingId) html += `<div class="note"><b>編集中</b>保存すると一覧の記録が上書きされます。</div>`;
 
