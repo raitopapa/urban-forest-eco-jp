@@ -178,7 +178,13 @@ input:focus,select:focus,textarea:focus{outline:3px solid #9BC2B4;outline-offset
 <script>
 "use strict";
 
-const SPECIES = ["ケヤキ","イチョウ","ソメイヨシノ","ヤマザクラ","クスノキ","ハナミズキ","ヤマボウシ","トウカエデ","イロハモミジ","プラタナス（モミジバスズカケノキ）","トチノキ","ユリノキ","エンジュ","シラカシ","アラカシ","マテバシイ","スダジイ","コナラ","クヌギ","ムクノキ","エノキ","アキニレ","ハルニレ","コブシ","ハクモクレン","タイサンボク","サルスベリ","ナンキンハゼ","モクセイ（キンモクセイ）","クロガネモチ","モチノキ","ソヨゴ","ヤマモモ","シマトネリコ","ケヤマハンノキ","シダレヤナギ","ポプラ（セイヨウハコヤナギ）","メタセコイア","ラクウショウ","ヒマラヤスギ","クロマツ","アカマツ","スギ","ヒノキ","イヌマキ","カイヅカイブキ","ツバキ（ヤブツバキ）","サザンカ","ハナカイドウ","ウメ"];
+const SPECIES_PRIMARY = ["ケヤキ","イチョウ","ソメイヨシノ","ヤマザクラ","クスノキ","ハナミズキ","ヤマボウシ","トウカエデ","イロハモミジ","プラタナス（モミジバスズカケノキ）","トチノキ","ユリノキ","エンジュ","シラカシ","アラカシ","マテバシイ","スダジイ","コナラ","クヌギ","ムクノキ","エノキ","アキニレ","ハルニレ","コブシ","ハクモクレン","タイサンボク","サルスベリ","ナンキンハゼ","モクセイ（キンモクセイ）","クロガネモチ","モチノキ","ソヨゴ","ヤマモモ","シマトネリコ","ケヤマハンノキ","シダレヤナギ","ポプラ（セイヨウハコヤナギ）","メタセコイア","ラクウショウ","ヒマラヤスギ","クロマツ","アカマツ","スギ","ヒノキ","イヌマキ","カイヅカイブキ","ツバキ（ヤブツバキ）","サザンカ","ハナカイドウ","ウメ"];
+// 高木性を中心とした追加候補。配列へ追記すれば後から候補を増やせる。
+const SPECIES_ADDITIONAL = ["タブノキ","アカガシ","ウラジロガシ","ツクバネガシ","カツラ","ホオノキ","ブナ","ミズナラ","カシワ","クリ","イヌシデ","アカシデ","シナノキ","ハリギリ","ミズキ","センダン","アオギリ","モミジバフウ","ムクロジ","ニセアカシア"];
+const SPECIES = [...SPECIES_PRIMARY, ...SPECIES_ADDITIONAL];
+const SURVEYORS = ["担当A","担当B","担当C"];
+const MODE_LABELS = {A:"炭素のみ評価", B:"＋その他生態系サービス", N:"i-Tree評価なし"};
+function modeLabel(mode){ const m = mode || "A"; return MODE_LABELS[m] || m; }
 const LIFE = ["生存","枯死","切株","不明"];
 const SITE = ["公園・広場","住宅周辺緑地","通路・園路沿い","駐車場周辺","道路沿い","施設敷地内緑地","その他"];
 const USE  = ["低","中","高","不明"];
@@ -200,7 +206,7 @@ const STORE_PHOTOS = "photos";
 const STORE_SETTINGS = "settings";
 const STORE_SYNC = "syncQueue";
 
-let cfg = {mode:"A", surveyor:"", date:new Date().toISOString().slice(0,10), prefix:"K-", next:1};
+let cfg = {mode:"A", surveyor:"担当A", date:new Date().toISOString().slice(0,10), prefix:"K-", next:1};
 let records = [];
 let cur = blank();
 let editingId = null;
@@ -306,21 +312,23 @@ function judge(r){
     diag: r.life === "枯死" ? "対象外（枯死）" : (h ? "対象" : "対象外"),
     base: e ? "対象" : "対象外"};
 }
-function missingFields(r){
+function missingFields(r, mode=cfg.mode){
   const out = [];
   if (!r.no) out.push("樹木番号");
-  if (!r.species) out.push("樹種");
-  if (num(r.dbh[0]) === null) out.push("DBH1");
-  if (num(r.ht) === null) out.push("樹高");
-  if (r.life !== "枯死"){
-    if (r.dieback === "") out.push("枝枯れ率");
-    if (r.cle === "") out.push("CLE");
-    if (cfg.mode === "B"){
-      if (num(r.liveHt) === null) out.push("生存部樹高");
-      if (num(r.crownBase) === null) out.push("樹冠基部高");
-      if (num(r.cwNS) === null) out.push("樹冠幅南北");
-      if (num(r.cwEW) === null) out.push("樹冠幅東西");
-      if (r.missing === "") out.push("樹冠欠損率");
+  if (!r.species || r.species === "__OTHER__") out.push("樹種");
+  if (mode !== "N"){
+    if (num(r.dbh[0]) === null) out.push("DBH1");
+    if (num(r.ht) === null) out.push("樹高");
+    if (r.life !== "枯死"){
+      if (r.dieback === "") out.push("枝枯れ率");
+      if (r.cle === "") out.push("CLE");
+      if (mode === "B"){
+        if (num(r.liveHt) === null) out.push("生存部樹高");
+        if (num(r.crownBase) === null) out.push("樹冠基部高");
+        if (num(r.cwNS) === null) out.push("樹冠幅南北");
+        if (num(r.cwEW) === null) out.push("樹冠幅東西");
+        if (r.missing === "") out.push("樹冠欠損率");
+      }
     }
   }
   return out;
@@ -334,6 +342,22 @@ function field(label, inner, hint){
 function sel(key, opts, val, blankLabel){
   return `<select data-k="${key}"><option value="">${esc(blankLabel||"—")}</option>` +
     opts.map(o=>`<option${o===val?" selected":""}>${esc(o)}</option>`).join("") + `</select>`;
+}
+function surveyorSelect(val){
+  const opts = SURVEYORS.includes(val) || !val ? SURVEYORS : [val, ...SURVEYORS];
+  return `<select data-k="cfgsurveyor"><option value="">— 選択 —</option>` +
+    opts.map(o=>`<option value="${esc(o)}"${o===val?" selected":""}>${esc(o)}</option>`).join("") + `</select>`;
+}
+function speciesControl(val){
+  const inPrimary = SPECIES_PRIMARY.includes(val), inAdditional = SPECIES_ADDITIONAL.includes(val);
+  const custom = val === "__OTHER__" || (!!val && !inPrimary && !inAdditional);
+  const customValue = val === "__OTHER__" ? "" : val;
+  return `<select data-k="speciesSelect">
+      <option value="">— 樹種を選択 —</option>
+      <optgroup label="基本候補">${SPECIES_PRIMARY.map(o=>`<option value="${esc(o)}"${o===val?" selected":""}>${esc(o)}</option>`).join("")}</optgroup>
+      <optgroup label="追加の高木性候補">${SPECIES_ADDITIONAL.map(o=>`<option value="${esc(o)}"${o===val?" selected":""}>${esc(o)}</option>`).join("")}</optgroup>
+      <option value="__OTHER__"${custom?" selected":""}>その他（自由入力）</option>
+    </select>` + (custom ? `<input type="text" data-k="speciesCustom" value="${esc(customValue)}" placeholder="樹種名を入力" style="margin-top:7px">` : "");
 }
 function chipRow(key, values, val, cls, labelFn){
   return `<div class="chips ${cls||""}" data-chip="${key}">` +
@@ -365,16 +389,19 @@ function toggles(key, items, chosen){
 function renderEntry(){
   const r = cur, dead = r.life === "枯死";
   const B = cfg.mode === "B";
+  const NONE = cfg.mode === "N";
   const stems = r.dbh.map((v,i)=>`<div><div class="lb">DBH${i+1} (cm)</div>
       <input type="number" inputmode="decimal" step="0.1" data-k="dbh${i}" value="${esc(v)}"></div>`).join("");
 
   let html = "";
 
   html += block("cfg", "調査の設定",
-    field("調査モード", `<select data-k="cfgmode">
-        <option value="A"${cfg.mode==="A"?" selected":""}>A：炭素優先</option>
-        <option value="B"${cfg.mode==="B"?" selected":""}>B：生態系サービス標準</option></select>`) +
-    field("点検者", `<input type="text" data-k="cfgsurveyor" value="${esc(cfg.surveyor)}" placeholder="氏名">`) +
+    field("i-Tree評価区分", `<select data-k="cfgmode">
+        <option value="A"${cfg.mode==="A"?" selected":""}>炭素のみ評価</option>
+        <option value="B"${cfg.mode==="B"?" selected":""}>＋その他生態系サービス</option>
+        <option value="N"${cfg.mode==="N"?" selected":""}>i-Tree評価なし</option></select>`,
+      "評価区分に応じて不要なi-Tree調査項目は表示しません。") +
+    field("点検者", surveyorSelect(cfg.surveyor)) +
     field("点検日", `<input type="date" data-k="cfgdate" value="${esc(cfg.date)}">`) +
     field("番号の付け方", `<div style="display:flex;gap:8px">
         <input type="text" data-k="cfgprefix" value="${esc(cfg.prefix)}" style="flex:0 0 40%" placeholder="K-">
@@ -383,13 +410,14 @@ function renderEntry(){
 
   html += block("basic", "基本",
     field("樹木番号", `<input type="text" data-k="no" value="${esc(r.no)}" placeholder="${esc(cfg.prefix + String(cfg.next).padStart(3,"0"))}">`) +
-    field("樹種（和名）", `<input type="text" data-k="species" list="dlSpecies" value="${esc(r.species)}" placeholder="入力または選択">`) +
+    field("樹種（和名）", speciesControl(r.species), "候補にない場合は「その他（自由入力）」を選択してください。") +
     field("生育状態", sel("life", LIFE, r.life)) +
     field("立地区分", sel("site", SITE, r.site)) +
     field("周辺利用", sel("use", USE, r.use)) +
     field("近接対象", sel("near", NEAR, r.near)) +
-    field("土地利用", sel("land", LAND, r.land, "現地で分かれば"), "空欄なら台帳側で立地区分から自動で当てます。"));
+    (NONE ? "" : field("土地利用", sel("land", LAND, r.land, "現地で分かれば"), "空欄なら台帳側で立地区分から自動で当てます。")));
 
+  if (!NONE){
   let itree = `<div class="hint" style="padding-top:10px">DBHは地上1.37 m・0.1 cm単位。株立ちは大きい順に最大6幹。</div>
     <div class="stems">${stems}</div>` +
     field("DBH測定高 (m)", `<input type="number" inputmode="decimal" step="0.01" data-k="dbhH" value="${esc(r.dbhH)}" placeholder="1.37以外で測ったときだけ">`) +
@@ -408,7 +436,10 @@ function renderEntry(){
         field("樹冠欠損率 (%)", chipRow("missing", CLASSES, r.missing, "wrap6"), "実測寸法で描いた外郭の内側で、枝葉がない割合。");
     }
   }
-  html += block("itree", "i-Tree 調査項目", itree);
+  html += block("itree", B ? "i-Tree｜＋その他生態系サービス" : "i-Tree｜炭素のみ評価", itree);
+  } else {
+    html += `<div class="note"><b>i-Tree評価なし</b>DBH・樹高・枝枯れ率・CLE・樹冠計測など、i-Tree専用の調査項目は非表示です。通常の樹木点検項目のみ記録します。</div>`;
+  }
 
   html += block("c1", "① 利用・維持管理", toggles("c1", CHK1, r.c1), r.c1.length);
   html += block("c2", "②③ 活力・樹体異常", toggles("c2", CHK2, r.c2), r.c2.length);
@@ -427,7 +458,6 @@ function renderEntry(){
         <span style="font-size:13px;color:var(--ink2)" id="gpsTxt">${r.lat?esc(r.lat)+", "+esc(r.lon):"未取得"}</span></div>`,
       "台帳の緯度・経度に貼る用です。木の真下で取得してください。"));
 
-  html += `<datalist id="dlSpecies">${SPECIES.map(s=>`<option>${esc(s)}</option>`).join("")}</datalist>`;
   if (editingId) html += `<div class="note"><b>編集中</b>保存すると一覧の記録が上書きされます。</div>`;
 
   document.getElementById("view-entry").innerHTML = html;
@@ -443,7 +473,7 @@ function updateResult(){
     `<span class="pill ${j.h?"bad":"ok"}">外観診断 ${j.diag}</span>` +
     `<span class="pill ${j.e?"warn":"ok"}">基盤 ${j.base}</span>`;
   document.getElementById("rl2").innerHTML = pills + (ok ? `①${j.m} ②③${j.h} ④${j.e}` : esc(miss.join("・")));
-  document.getElementById("btnSave").disabled = !(cur.no || cfg.next) || !cur.species;
+  document.getElementById("btnSave").disabled = !(cur.no || cfg.next) || !cur.species || cur.species === "__OTHER__";
   document.getElementById("cntBadge").textContent = records.length + "本";
   persistDraft();
 }
@@ -515,6 +545,16 @@ async function updateStorageBadge(){
 document.addEventListener("input", e=>{
   const k = e.target.dataset.k; if (!k) return;
   const v = e.target.value;
+  if (k === "speciesSelect"){
+    cur.species = v;
+    renderEntry();
+    return;
+  }
+  if (k === "speciesCustom"){
+    cur.species = v || "__OTHER__";
+    updateResult();
+    return;
+  }
   if (k.startsWith("cfg")){
     const f = k.slice(3);
     if (f === "next") cfg.next = Math.max(1, parseInt(v||"1",10));
@@ -629,7 +669,7 @@ function renderList(){
       <div class="meta"><b>${esc(r.species||"樹種未入力")}</b>　${esc(r.life)}<br>
         ${esc(j.result)}<br>
         <span class="pill ${miss.length?"warn":"ok"}">${miss.length?("未入力 "+miss.length):"入力充足"}</span>
-        <span style="font-size:12px">${esc(r.mode)}モード / ${esc(r.date||"")} / 写真 ${(r.photoIds||[]).length}枚</span></div>
+        <span style="font-size:12px">${esc(modeLabel(r.mode))} / ${esc(r.date||"")} / 写真 ${(r.photoIds||[]).length}枚</span></div>
       <div style="display:flex;flex-direction:column;gap:6px">
         <button data-edit="${r.id}">編集</button>
         <button data-del="${r.id}">削除</button></div>
@@ -638,8 +678,7 @@ function renderList(){
   v.innerHTML = `<div class="toolbar"><button id="btnNew" class="primary">新規入力へ</button></div>` + rows;
 }
 function missingFieldsFor(r){
-  const saved = cfg.mode; cfg.mode = r.mode || "A";
-  const out = missingFields(r); cfg.mode = saved; return out;
+  return missingFields(r, r.mode || "A");
 }
 document.addEventListener("click", e=>{
   const ed = e.target.dataset.edit, dl = e.target.dataset.del;
@@ -673,6 +712,8 @@ const COLS_B = ["樹木番号","点検日","点検者","樹種（和名）","生
   "DBH測定高(m)","枯死幹数","樹高(m)","枝枯れ率(%)","樹冠受光度（CLE 0〜5）","土地利用",
   "生存部樹高(m)","樹冠基部高(m)","樹冠幅 南北(m)","樹冠幅 東西(m)","樹冠欠損率(%)",""]
   .concat(CHK1, [""], CHK2, [""], CHK3, ["","維持管理数","健全度異常数","生育環境数","点検結果","外観診断対象","基盤詳細確認","特記事項","写真No."]);
+const COLS_N = ["評価区分","樹木番号","点検日","点検者","樹種（和名）","生育状態","樹木立地区分","周辺利用","近接対象",""]
+  .concat(CHK1, [""], CHK2, [""], CHK3, ["","維持管理数","健全度異常数","生育環境数","点検結果","外観診断対象","基盤詳細確認","特記事項","写真No."]);
 
 function rowFor(r){
   const dead = r.life === "枯死";
@@ -686,6 +727,13 @@ function rowFor(r){
   const j = judge(r);
   return base.concat(ext, mark(r.c1,CHK1), [""], mark(r.c2,CHK2), [""], mark(r.c3,CHK3), ["",
     j.m, j.h, j.e, j.result, j.diag, j.base, r.note, r.photo]);
+}
+function rowForInspection(r){
+  const mark = (arr, list) => list.map(t => arr.includes(t) ? "○" : "");
+  const j = judge(r);
+  return [modeLabel(r.mode), r.no, r.date, r.surveyor, r.species, r.life, r.site, r.use, r.near, ""]
+    .concat(mark(r.c1,CHK1), [""], mark(r.c2,CHK2), [""], mark(r.c3,CHK3), ["",
+      j.m, j.h, j.e, j.result, j.diag, j.base, r.note, r.photo]);
 }
 function toCSV(rows){
   return rows.map(cols => cols.map(c=>{
@@ -701,16 +749,21 @@ function download(name, text){
   setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 500);
 }
 function renderOut(){
-  const nA = records.filter(r=>r.mode!=="B").length, nB = records.filter(r=>r.mode==="B").length;
+  const nA = records.filter(r=>(r.mode||"A")==="A").length;
+  const nB = records.filter(r=>r.mode==="B").length;
+  const nN = records.filter(r=>r.mode==="N").length;
   const incomplete = records.filter(r=>missingFieldsFor(r).length).length;
   document.getElementById("view-out").innerHTML = `
     <div class="note"><b>Excelへの貼り付け方</b>
-      書き出したCSVを開き、データ行だけをコピーして、点検票の <b>B6</b> セルに貼り付けてください。
-      列の並びは点検票と同じで、区切り列も空欄で入っています。判定6列もExcelと同じロジックで出力するため、B6から連続して貼り付けられます。</div>
+      「炭素のみ評価」「＋その他生態系サービス」は、書き出したCSVのデータ行だけをコピーして、対応する点検票の <b>B6</b> セルに貼り付けます。
+      「i-Tree評価なし」は点検項目だけの独立CSVとして書き出します。</div>
     ${incomplete ? `<div class="err">未入力のある記録が ${incomplete} 件あります。書き出す前に一覧で確認してください。</div>` : ""}
     <div class="toolbar">
-      <button id="expA" ${nA?"":"disabled"}>Aモード ${nA}本 をCSVで書き出す</button>
-      <button id="expB" ${nB?"":"disabled"}>Bモード ${nB}本 をCSVで書き出す</button>
+      <button id="expA" ${nA?"":"disabled"}>炭素のみ評価 ${nA}本</button>
+      <button id="expB" ${nB?"":"disabled"}>＋その他生態系サービス ${nB}本</button>
+    </div>
+    <div class="toolbar">
+      <button id="expN" ${nN?"":"disabled"}>i-Tree評価なし ${nN}本（点検CSV）</button>
     </div>
     <div class="toolbar">
       <button id="expGps" ${records.some(r=>r.lat)?"":"disabled"}>緯度経度だけ書き出す（台帳用）</button>
@@ -727,10 +780,16 @@ document.addEventListener("click", e=>{
   const stamp = new Date().toISOString().slice(0,10).replace(/-/g,"");
   if (id === "expA" || id === "expB"){
     const mode = id === "expA" ? "A" : "B";
-    const rs = records.filter(r => (r.mode==="B") === (mode==="B"));
+    const rs = records.filter(r => (r.mode || "A") === mode);
     const cols = mode === "B" ? COLS_B : COLS_A;
-    download(`点検票貼付_${mode}モード_${stamp}.csv`, toCSV([cols].concat(rs.map(rowFor))));
+    const label = mode === "B" ? "その他生態系サービス" : "炭素のみ";
+    download(`点検票貼付_${label}_${stamp}.csv`, toCSV([cols].concat(rs.map(rowFor))));
     toast("書き出しました");
+  }
+  if (id === "expN"){
+    const rs = records.filter(r=>r.mode==="N");
+    download(`樹木点検_iTree評価なし_${stamp}.csv`, toCSV([COLS_N].concat(rs.map(rowForInspection))));
+    toast("点検CSVを書き出しました");
   }
   if (id === "expGps"){
     const rs = records.filter(r=>r.lat);
@@ -805,7 +864,9 @@ async function boot(){
     idb = await openTreeDb();
     const moved = await migrateLegacy();
     cfg = Object.assign(cfg, await getSetting("cfg",{}));
-    records = (await dbGetAll(STORE_RECORDS)).map(r=>{ r.photoIds=Array.isArray(r.photoIds)?r.photoIds:[]; return r; });
+    if (!MODE_LABELS[cfg.mode]) cfg.mode = "A";
+    if (!cfg.surveyor) cfg.surveyor = SURVEYORS[0];
+    records = (await dbGetAll(STORE_RECORDS)).map(r=>{ r.photoIds=Array.isArray(r.photoIds)?r.photoIds:[]; r.mode=r.mode||"A"; return r; });
     const draft = await getSetting("draft",null);
     if (draft && draft.cur){ cur = Object.assign(blank(),draft.cur); cur.photoIds=Array.isArray(draft.cur.photoIds)?draft.cur.photoIds:[]; editingId=draft.editingId||null; }
     netBadge(); renderEntry(); await initPwa();
