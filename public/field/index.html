@@ -184,7 +184,7 @@ const SPECIES_ADDITIONAL = ["タブノキ","アカガシ","ウラジロガシ","
 const SPECIES = [...SPECIES_PRIMARY, ...SPECIES_ADDITIONAL];
 const SURVEYORS = ["担当A","担当B","担当C"];
 const MODE_LABELS = {A:"炭素のみ評価", B:"＋その他生態系サービス", N:"i-Tree評価なし"};
-function modeLabel(mode){ return MODE_LABELS[mode] || mode || MODE_LABELS.N; }
+function modeLabel(mode){ const m = mode || "A"; return MODE_LABELS[m] || m; }
 const LIFE = ["生存","枯死","切株","不明"];
 const SITE = ["公園・広場","住宅周辺緑地","通路・園路沿い","駐車場周辺","道路沿い","施設敷地内緑地","その他"];
 const USE  = ["低","中","高","不明"];
@@ -544,6 +544,11 @@ async function updateStorageBadge(){
 document.addEventListener("input", e=>{
   const k = e.target.dataset.k; if (!k) return;
   const v = e.target.value;
+  if (k === "speciesSelect"){
+    cur.species = v === "__OTHER__" ? "" : v;
+    renderEntry();
+    return;
+  }
   if (k.startsWith("cfg")){
     const f = k.slice(3);
     if (f === "next") cfg.next = Math.max(1, parseInt(v||"1",10));
@@ -658,7 +663,7 @@ function renderList(){
       <div class="meta"><b>${esc(r.species||"樹種未入力")}</b>　${esc(r.life)}<br>
         ${esc(j.result)}<br>
         <span class="pill ${miss.length?"warn":"ok"}">${miss.length?("未入力 "+miss.length):"入力充足"}</span>
-        <span style="font-size:12px">${esc(r.mode)}モード / ${esc(r.date||"")} / 写真 ${(r.photoIds||[]).length}枚</span></div>
+        <span style="font-size:12px">${esc(modeLabel(r.mode))} / ${esc(r.date||"")} / 写真 ${(r.photoIds||[]).length}枚</span></div>
       <div style="display:flex;flex-direction:column;gap:6px">
         <button data-edit="${r.id}">編集</button>
         <button data-del="${r.id}">削除</button></div>
@@ -667,8 +672,7 @@ function renderList(){
   v.innerHTML = `<div class="toolbar"><button id="btnNew" class="primary">新規入力へ</button></div>` + rows;
 }
 function missingFieldsFor(r){
-  const saved = cfg.mode; cfg.mode = r.mode || "A";
-  const out = missingFields(r); cfg.mode = saved; return out;
+  return missingFields(r, r.mode || "A");
 }
 document.addEventListener("click", e=>{
   const ed = e.target.dataset.edit, dl = e.target.dataset.del;
@@ -702,6 +706,8 @@ const COLS_B = ["樹木番号","点検日","点検者","樹種（和名）","生
   "DBH測定高(m)","枯死幹数","樹高(m)","枝枯れ率(%)","樹冠受光度（CLE 0〜5）","土地利用",
   "生存部樹高(m)","樹冠基部高(m)","樹冠幅 南北(m)","樹冠幅 東西(m)","樹冠欠損率(%)",""]
   .concat(CHK1, [""], CHK2, [""], CHK3, ["","維持管理数","健全度異常数","生育環境数","点検結果","外観診断対象","基盤詳細確認","特記事項","写真No."]);
+const COLS_N = ["評価区分","樹木番号","点検日","点検者","樹種（和名）","生育状態","樹木立地区分","周辺利用","近接対象",""]
+  .concat(CHK1, [""], CHK2, [""], CHK3, ["","維持管理数","健全度異常数","生育環境数","点検結果","外観診断対象","基盤詳細確認","特記事項","写真No."]);
 
 function rowFor(r){
   const dead = r.life === "枯死";
@@ -715,6 +721,13 @@ function rowFor(r){
   const j = judge(r);
   return base.concat(ext, mark(r.c1,CHK1), [""], mark(r.c2,CHK2), [""], mark(r.c3,CHK3), ["",
     j.m, j.h, j.e, j.result, j.diag, j.base, r.note, r.photo]);
+}
+function rowForInspection(r){
+  const mark = (arr, list) => list.map(t => arr.includes(t) ? "○" : "");
+  const j = judge(r);
+  return [modeLabel(r.mode), r.no, r.date, r.surveyor, r.species, r.life, r.site, r.use, r.near, ""]
+    .concat(mark(r.c1,CHK1), [""], mark(r.c2,CHK2), [""], mark(r.c3,CHK3), ["",
+      j.m, j.h, j.e, j.result, j.diag, j.base, r.note, r.photo]);
 }
 function toCSV(rows){
   return rows.map(cols => cols.map(c=>{
@@ -730,16 +743,21 @@ function download(name, text){
   setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 500);
 }
 function renderOut(){
-  const nA = records.filter(r=>r.mode!=="B").length, nB = records.filter(r=>r.mode==="B").length;
+  const nA = records.filter(r=>(r.mode||"A")==="A").length;
+  const nB = records.filter(r=>r.mode==="B").length;
+  const nN = records.filter(r=>r.mode==="N").length;
   const incomplete = records.filter(r=>missingFieldsFor(r).length).length;
   document.getElementById("view-out").innerHTML = `
     <div class="note"><b>Excelへの貼り付け方</b>
-      書き出したCSVを開き、データ行だけをコピーして、点検票の <b>B6</b> セルに貼り付けてください。
-      列の並びは点検票と同じで、区切り列も空欄で入っています。判定6列もExcelと同じロジックで出力するため、B6から連続して貼り付けられます。</div>
+      「炭素のみ評価」「＋その他生態系サービス」は、書き出したCSVのデータ行だけをコピーして、対応する点検票の <b>B6</b> セルに貼り付けます。
+      「i-Tree評価なし」は点検項目だけの独立CSVとして書き出します。</div>
     ${incomplete ? `<div class="err">未入力のある記録が ${incomplete} 件あります。書き出す前に一覧で確認してください。</div>` : ""}
     <div class="toolbar">
-      <button id="expA" ${nA?"":"disabled"}>Aモード ${nA}本 をCSVで書き出す</button>
-      <button id="expB" ${nB?"":"disabled"}>Bモード ${nB}本 をCSVで書き出す</button>
+      <button id="expA" ${nA?"":"disabled"}>炭素のみ評価 ${nA}本</button>
+      <button id="expB" ${nB?"":"disabled"}>＋その他生態系サービス ${nB}本</button>
+    </div>
+    <div class="toolbar">
+      <button id="expN" ${nN?"":"disabled"}>i-Tree評価なし ${nN}本（点検CSV）</button>
     </div>
     <div class="toolbar">
       <button id="expGps" ${records.some(r=>r.lat)?"":"disabled"}>緯度経度だけ書き出す（台帳用）</button>
@@ -756,10 +774,16 @@ document.addEventListener("click", e=>{
   const stamp = new Date().toISOString().slice(0,10).replace(/-/g,"");
   if (id === "expA" || id === "expB"){
     const mode = id === "expA" ? "A" : "B";
-    const rs = records.filter(r => (r.mode==="B") === (mode==="B"));
+    const rs = records.filter(r => (r.mode || "A") === mode);
     const cols = mode === "B" ? COLS_B : COLS_A;
-    download(`点検票貼付_${mode}モード_${stamp}.csv`, toCSV([cols].concat(rs.map(rowFor))));
+    const label = mode === "B" ? "その他生態系サービス" : "炭素のみ";
+    download(`点検票貼付_${label}_${stamp}.csv`, toCSV([cols].concat(rs.map(rowFor))));
     toast("書き出しました");
+  }
+  if (id === "expN"){
+    const rs = records.filter(r=>r.mode==="N");
+    download(`樹木点検_iTree評価なし_${stamp}.csv`, toCSV([COLS_N].concat(rs.map(rowForInspection))));
+    toast("点検CSVを書き出しました");
   }
   if (id === "expGps"){
     const rs = records.filter(r=>r.lat);
@@ -834,7 +858,9 @@ async function boot(){
     idb = await openTreeDb();
     const moved = await migrateLegacy();
     cfg = Object.assign(cfg, await getSetting("cfg",{}));
-    records = (await dbGetAll(STORE_RECORDS)).map(r=>{ r.photoIds=Array.isArray(r.photoIds)?r.photoIds:[]; return r; });
+    if (!MODE_LABELS[cfg.mode]) cfg.mode = "A";
+    if (!cfg.surveyor) cfg.surveyor = SURVEYORS[0];
+    records = (await dbGetAll(STORE_RECORDS)).map(r=>{ r.photoIds=Array.isArray(r.photoIds)?r.photoIds:[]; r.mode=r.mode||"A"; return r; });
     const draft = await getSetting("draft",null);
     if (draft && draft.cur){ cur = Object.assign(blank(),draft.cur); cur.photoIds=Array.isArray(draft.cur.photoIds)?draft.cur.photoIds:[]; editingId=draft.editingId||null; }
     netBadge(); renderEntry(); await initPwa();
