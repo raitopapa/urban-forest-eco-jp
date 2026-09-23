@@ -315,7 +315,7 @@ function judge(r){
 function missingFields(r, mode=cfg.mode){
   const out = [];
   if (!r.no) out.push("樹木番号");
-  if (!r.species) out.push("樹種");
+  if (!r.species || r.species === "__OTHER__") out.push("樹種");
   if (mode !== "N"){
     if (num(r.dbh[0]) === null) out.push("DBH1");
     if (num(r.ht) === null) out.push("樹高");
@@ -350,13 +350,14 @@ function surveyorSelect(val){
 }
 function speciesControl(val){
   const inPrimary = SPECIES_PRIMARY.includes(val), inAdditional = SPECIES_ADDITIONAL.includes(val);
-  const custom = !!val && !inPrimary && !inAdditional;
+  const custom = val === "__OTHER__" || (!!val && !inPrimary && !inAdditional);
+  const customValue = val === "__OTHER__" ? "" : val;
   return `<select data-k="speciesSelect">
       <option value="">— 樹種を選択 —</option>
       <optgroup label="基本候補">${SPECIES_PRIMARY.map(o=>`<option value="${esc(o)}"${o===val?" selected":""}>${esc(o)}</option>`).join("")}</optgroup>
       <optgroup label="追加の高木性候補">${SPECIES_ADDITIONAL.map(o=>`<option value="${esc(o)}"${o===val?" selected":""}>${esc(o)}</option>`).join("")}</optgroup>
       <option value="__OTHER__"${custom?" selected":""}>その他（自由入力）</option>
-    </select>` + (custom ? `<input type="text" data-k="species" value="${esc(val)}" placeholder="樹種名を入力" style="margin-top:7px">` : "");
+    </select>` + (custom ? `<input type="text" data-k="speciesCustom" value="${esc(customValue)}" placeholder="樹種名を入力" style="margin-top:7px">` : "");
 }
 function chipRow(key, values, val, cls, labelFn){
   return `<div class="chips ${cls||""}" data-chip="${key}">` +
@@ -472,7 +473,7 @@ function updateResult(){
     `<span class="pill ${j.h?"bad":"ok"}">外観診断 ${j.diag}</span>` +
     `<span class="pill ${j.e?"warn":"ok"}">基盤 ${j.base}</span>`;
   document.getElementById("rl2").innerHTML = pills + (ok ? `①${j.m} ②③${j.h} ④${j.e}` : esc(miss.join("・")));
-  document.getElementById("btnSave").disabled = !(cur.no || cfg.next) || !cur.species;
+  document.getElementById("btnSave").disabled = !(cur.no || cfg.next) || !cur.species || cur.species === "__OTHER__";
   document.getElementById("cntBadge").textContent = records.length + "本";
   persistDraft();
 }
@@ -545,8 +546,13 @@ document.addEventListener("input", e=>{
   const k = e.target.dataset.k; if (!k) return;
   const v = e.target.value;
   if (k === "speciesSelect"){
-    cur.species = v === "__OTHER__" ? "" : v;
+    cur.species = v;
     renderEntry();
+    return;
+  }
+  if (k === "speciesCustom"){
+    cur.species = v || "__OTHER__";
+    updateResult();
     return;
   }
   if (k.startsWith("cfg")){
