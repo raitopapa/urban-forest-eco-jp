@@ -488,6 +488,17 @@ function fmtBytes(n){
   if (n < 1024*1024) return Math.max(1,Math.round(n/1024))+" KB";
   return (n/1024/1024).toFixed(1)+" MB";
 }
+async function downloadPhoto(id){
+  const p=await dbGet(STORE_PHOTOS,id);
+  if (!p?.blob) throw new Error("写真がありません");
+  const a=document.createElement("a"); a.href=URL.createObjectURL(p.blob); a.download=photoExportName(p);
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },1000);
+}
+function photoExportName(p){
+  const ext=(p.name||"").match(/\.[a-zA-Z0-9]{1,8}$/)?.[0] || (p.type === "image/png" ? ".png" : ".jpg");
+  return `${(p.photoNo || p.id).replace(/[^\w\u3040-\u30ff\u3400-\u9fff-]/g,"_")}_${p.id.slice(0,8)}${ext}`;
+}
 async function renderPhotoList(){
   const el = document.getElementById("photoList"); if (!el || !idb) return;
   cleanupPhotoUrls();
@@ -499,7 +510,7 @@ async function renderPhotoList(){
     const u=URL.createObjectURL(p.blob); photoUrls.push(u);
     cards.push(`<div class="photo-card"><img src="${u}" alt="樹木写真 ${i+1}">
       <button type="button" class="pdel" data-photo-del="${esc(p.id)}" aria-label="写真を削除">×</button>
-      <div class="pm"><b>${esc(p.photoNo || "保存時に写真No.付与")}</b>${esc(fmtBytes(p.size||p.blob.size))}</div></div>`);
+      <div class="pm"><b>${esc(p.photoNo || "保存時に写真No.付与")}</b>${esc(fmtBytes(p.size||p.blob.size))}<br><button type="button" data-photo-download="${esc(p.id)}">写真を保存</button></div></div>`);
   }
   el.innerHTML=cards.join("");
 }
@@ -597,6 +608,8 @@ document.addEventListener("click", e=>{
     document.getElementById("photoInput")?.click(); return;
   }
   const pd = e.target.closest("[data-photo-del]");
+  const dl = e.target.closest("[data-photo-download]");
+  if (dl){ downloadPhoto(dl.dataset.photoDownload).catch(()=>toast("写真を取り出せませんでした")); return; }
   if (pd){
     if (confirm("この写真を端末から削除しますか？")) removePhoto(pd.dataset.photoDel); return;
   }
@@ -751,6 +764,64 @@ function download(name, text){
   document.body.appendChild(a); a.click();
   setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 500);
 }
+/* 共有DB: 認証後の明示的な送信。写真の実データは送らない。 */
+const CLOUD_URL="https://udersgrrqcdacahietzm.supabase.co";
+const CLOUD_KEY="sb_publishable_P8kVfImxJDDXOw8nUHBAXw_AKsVANvG";
+let cloudSession=null, cloudRows=[];
+async function cloudRequest(path,opts={}){
+  const headers={apikey:CLOUD_KEY,"Content-Type":"application/json",...opts.headers};
+  if(cloudSession) headers.Authorization=`Bearer ${cloudSession.access_token}`;
+  const res=await fetch(CLOUD_URL+path,{...opts,headers,cache:"no-store"});
+  const raw=await res.text(); let data;
+  try{ data=raw ? JSON.parse(raw) : null; }catch{ data=raw; }
+  if(!res.ok) throw new Error(data?.message || data?.msg || data?.error_description || `通信エラー ${res.status}`);
+  return data;
+}
+async function cloudLogin(email,password){
+  const session=await cloudRequest("/auth/v1/token?grant_type=password",{method:"POST",body:JSON.stringify({email,password})});
+  cloudSession=session;
+  try{
+    const member=await cloudRequest(`/rest/v1/survey_members?select=user_id&user_id=eq.${encodeURIComponent(session.user.id)}`);
+    if(!member.length) throw new Error("共有先の利用者登録がありません。管理者に連絡してください。");
+  }catch(e){cloudSession=null;throw e;}
+  renderOut();
+}
+async function recordForCloud(r){
+  const photos=[];
+  for(const id of (r.photoIds||[])){
+    const p=await dbGet(STORE_PHOTOS,id);
+    if(p) photos.push({photo_id:p.id,photo_no:p.photoNo,original_name:p.name,export_name:photoExportName(p)});
+  }
+  const payload={...r,photoIds:[],photoReferences:photos};
+  const bytes=new TextEncoder().encode(JSON.stringify(payload));
+  const digest=await crypto.subtle.digest("SHA-256",bytes);
+  const content_hash=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,"0")).join("");
+  return {owner_id:cloudSession.user.id,source_record_id:String(r.id),content_hash,tree_no:r.no||"",surveyor:r.surveyor||"",payload};
+}
+async function cloudSend(){
+  if(!cloudSession || !navigator.onLine) throw new Error("ログインと通信が必要です");
+  let sent=0;
+  for(const r of records){
+    const row=await recordForCloud(r);
+    await cloudRequest("/rest/v1/survey_records?on_conflict=owner_id,source_record_id,content_hash",{
+      method:"POST",headers:{Prefer:"resolution=ignore-duplicates,return=minimal"},body:JSON.stringify(row)
+    });
+    sent++;
+  }
+  return sent;
+}
+async function cloudLoad(){
+  if(!cloudSession) throw new Error("ログインが必要です");
+  cloudRows=[];
+  for(let start=0;;start+=500){
+    const part=await cloudRequest(`/rest/v1/survey_records?select=id,source_record_id,tree_no,surveyor,created_at,payload&order=created_at.desc&limit=500&offset=${start}`);
+    cloudRows.push(...part);
+    if(part.length<500) break;
+  }
+  const counts=new Map(); cloudRows.forEach(row=>counts.set(row.tree_no,(counts.get(row.tree_no)||0)+1));
+  const body=cloudRows.map(row=>`<div class="card"><div class="no">${esc(row.tree_no||"番号なし")}</div><div class="meta">${esc(row.surveyor||"")} / ${esc(row.payload?.species||"")} / 写真No. ${esc((row.payload?.photoReferences||[]).map(p=>p.photo_no).join(", ") || row.payload?.photo || "なし")}<br>${counts.get(row.tree_no)>1?'<span class="pill warn">同番号の記録あり：要確認</span>':''}<small>${esc(row.created_at||"")}</small></div></div>`).join("");
+  document.getElementById("cloudList").innerHTML=`<b>共有記録 ${cloudRows.length}件（編集履歴を含む）</b>`+(body||"<p>記録はありません。</p>");
+}
 function renderOut(){
   const nA = records.filter(r=>(r.mode||"A")==="A").length;
   const nB = records.filter(r=>r.mode==="B").length;
@@ -773,6 +844,10 @@ function renderOut(){
       <button id="expJson" ${records.length?"":"disabled"}>バックアップを保存（JSON）</button>
     </div>
     <div class="toolbar"><button id="impJson">バックアップを読み込む</button></div>
+    <div class="note"><b>共有DBへ送信（写真本体は対象外）</b><br>
+      ${cloudSession ? `ログイン中: ${esc(cloudSession.user.email||"")}<div class="toolbar"><button id="cloudSend" ${records.length?"":"disabled"}>この端末の記録を送る</button><button id="cloudLoad">共有記録を見る</button><button id="cloudExport">共有記録をJSON保存</button><button id="cloudLogout">ログアウト</button></div>` : `<div class="toolbar"><input id="cloudEmail" type="email" autocomplete="username" placeholder="登録済みメールアドレス"><input id="cloudPassword" type="password" autocomplete="current-password" placeholder="パスワード"><button id="cloudLogin">ログイン</button></div>`}
+      <div id="cloudStatus" role="status"></div><div id="cloudList"></div>
+      写真は各記録の編集画面から番号付きで保存し、別の保管先に置けます。共有記録に写真No.とファイル名を残します。</div>
     <div class="note"><b>オフライン保存について</b>
       点検データと写真はIndexedDBに保存されます。通信がなくても入力・保存できます。JSONバックアップには写真本体は含まれません。
       ブラウザの「サイトデータを削除」すると消えるため、作業の区切りごとにCSV/JSONも保存してください。</div>
@@ -780,6 +855,29 @@ function renderOut(){
 }
 document.addEventListener("click", e=>{
   const id = e.target.id;
+  if(["cloudLogin","cloudSend","cloudLoad","cloudExport","cloudLogout"].includes(id)){
+    const button=e.target, status=document.getElementById("cloudStatus");
+    if(id === "cloudLogout"){cloudSession=null;cloudRows=[];renderOut();return;}
+    button.disabled=true; status.textContent="処理中…";
+    (async()=>{
+      if(id === "cloudLogin"){
+        const email=document.getElementById("cloudEmail").value.trim(), password=document.getElementById("cloudPassword").value;
+        if(!email || !password) throw new Error("メールアドレスとパスワードを入力してください");
+        await cloudLogin(email,password);
+      }
+      if(id === "cloudSend") status.textContent=`${await cloudSend()}件の送信が完了しました。同じ内容の再送は重複登録されません。`;
+      if(id === "cloudLoad") await cloudLoad();
+      if(id === "cloudExport"){
+        await cloudLoad();
+        const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([JSON.stringify(cloudRows,null,2)],{type:"application/json"}));
+        a.download=`共有点検記録_${new Date().toISOString().slice(0,10)}.json`; a.click();
+        setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+      }
+      document.getElementById("cloudStatus").textContent=id === "cloudLogin" ? "ログインしました" : id === "cloudLoad" || id === "cloudExport" ? `${cloudRows.length}件を取得しました` : document.getElementById("cloudStatus").textContent;
+    })().catch(err=>{ const target=document.getElementById("cloudStatus"); if(target) target.textContent=`失敗: ${err.message}`; })
+      .finally(()=>{if(button.isConnected) button.disabled=false;});
+    return;
+  }
   const stamp = new Date().toISOString().slice(0,10).replace(/-/g,"");
   if (id === "expA" || id === "expB"){
     const mode = id === "expA" ? "A" : "B";
