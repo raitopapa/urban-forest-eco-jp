@@ -20,6 +20,9 @@ main { padding: 16px 22px 24px; }
 .cloud-button { min-height: 36px; background: #e5eee7; color: #17372a; }
 .data-source { margin-left: auto; color: #53645a; font-weight: 700; }
 .cloud-error { flex-basis: 100%; margin: 0; color: #a42d23; }
+.eco-review { margin: 0 0 12px; padding: 12px 15px; border: 1px solid #e7cd8e; border-radius: 7px; background: #fffaf0; font-size: 12px; }
+.eco-review p { margin: 5px 0; line-height: 1.6; }.eco-review ul { margin: 6px 0 0; padding-left: 20px; }
+.eco-codes { display: flex; flex-wrap: wrap; gap: 10px; margin: 10px 0; }.eco-codes label { display: flex; align-items: center; gap: 7px; }.eco-codes input { width: 100px; min-height: 32px; padding: 4px 6px; border: 1px solid #ccd7cf; border-radius: 4px; }
 .stats { display: grid; grid-template-columns: repeat(4, minmax(110px, 1fr)) minmax(220px, 1.6fr); gap: 10px; margin-bottom: 12px; }
 .stat, .stats-action { min-height: 74px; padding: 12px 15px; background: #fff; border: 1px solid #dbe3dc; border-radius: 7px; }
 .stat span { display: block; color: #66786e; font-size: 11px; }.stat strong { display: block; margin-top: 5px; color: #244d3a; font-family: Georgia, serif; font-size: 22px; }.stat-alert { border-left: 4px solid #d3743f; }
