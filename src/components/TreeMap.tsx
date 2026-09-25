@@ -104,6 +104,7 @@ export function TreeMap({ trees, selectedTreeId, onSelectTree }: Props) {
           <span><i className="legend-good" />良好</span>
           <span><i className="legend-fair" />普通</span>
           <span><i className="legend-alert" />要確認</span>
+          <span><i className="legend-unknown" />未評価</span>
           <small>黄色の外枠：選択中</small>
         </div>
       )}
@@ -161,6 +162,7 @@ function clearMarkers(markersRef: MutableRefObject<Marker[]>) {
 }
 
 function healthClass(tree: TreeRecord) {
+  if (tree.healthCondition === "unknown") return " marker-unknown";
   if (tree.healthCondition === "fair") return " marker-fair";
   if (["poor", "critical", "dead"].includes(tree.healthCondition)) return " marker-alert";
   return " marker-good";
