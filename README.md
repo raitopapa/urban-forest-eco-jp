@@ -14,10 +14,11 @@
 
 ## Webアプリ
 
-- 管理・可視化画面: GitHub Pages ルート
-- 現地入力PWA: `/field/`
+- [管理・可視化画面](https://raitopapa.github.io/urban-forest-eco-jp/)
+- [現地入力PWA（全木点検）](https://raitopapa.github.io/urban-forest-eco-jp/field/)
 - 現地入力はIndexedDBへ保存し、オフラインでも利用可能
-- Supabase自動同期は次段階で実装予定
+- 登録済み利用者は現地入力画面の「書き出し」から、写真本体を除く点検記録を共有DBに手動送信できます。写真No.とファイル名を紐付けます。詳しくは[現地入力PWAの手順](public/field/README.md)を参照してください。
+- 自動同期は次段階で実装予定
 
 ## 起動
 
@@ -44,4 +45,4 @@ npm run build
 
 - サンプルデータは架空のデモデータです。
 - i-Tree用CSVは項目変換の初期案です。実際の投入前に、対象プロジェクトのi-Treeインポート仕様を確認してください。
-- 開発中の非公開プロジェクトであり、ライセンスは未決定です。
+- 開発中のプロジェクトであり、ライセンスは未決定です。
