@@ -671,6 +671,7 @@ function renderList(){
       <div class="meta"><b>${esc(r.species||"樹種未入力")}</b>　${esc(r.life)}<br>
         ${esc(j.result)}<br>
         <span class="pill ${miss.length?"warn":"ok"}">${miss.length?("未入力 "+miss.length):"入力充足"}</span>
+        ${r.importConflict ? '<span class="pill warn">重複・競合：要確認</span>' : ''}
         <span style="font-size:12px">${esc(modeLabel(r.mode))} / ${esc(r.date||"")} / 写真 ${(r.photoIds||[]).length}枚</span></div>
       <div style="display:flex;flex-direction:column;gap:6px">
         <button data-edit="${r.id}">編集</button>
@@ -805,6 +806,32 @@ document.addEventListener("click", e=>{
   }
   if (id === "impJson") document.getElementById("fileJson").click();
 });
+function importPayload(r){
+  const x = Object.assign({},r);
+  delete x.id; delete x.importSourceId; delete x.importConflict;
+  return JSON.stringify(Object.keys(x).sort().map(k => [k,x[k]]));
+}
+function prepareImportRecords(incoming,current){
+  const known = [...current], add = [];
+  let conflictCount = 0;
+  for (const r of incoming){
+    if (!r || typeof r !== "object" || Array.isArray(r)) continue;
+    const x = Object.assign(blank(),r);
+    x.photoIds = Array.isArray(r.photoIds) ? r.photoIds : [];
+    const sourceId = x.id || uid();
+    x.id = sourceId;
+    const payload = importPayload(x);
+    if (known.some(z => (z.id === sourceId || z.importSourceId === sourceId) && importPayload(z) === payload)) continue;
+    if (known.some(z => z.id === sourceId || (x.no && z.no === x.no))){
+      x.id = uid();
+      x.importSourceId = sourceId;
+      x.importConflict = true;
+      conflictCount++;
+    }
+    known.push(x); add.push(x);
+  }
+  return {add,conflictCount};
+}
 document.addEventListener("change", e=>{
   if (e.target.id !== "fileJson" || !e.target.files[0]) return;
   const fr = new FileReader();
@@ -812,12 +839,12 @@ document.addEventListener("change", e=>{
     try{
       const d = JSON.parse(fr.result);
       if (!Array.isArray(d.records)) throw 0;
-      const have = new Set(records.map(r=>r.id));
-      const add = d.records.filter(r=>!have.has(r.id)).map(r=>{ const x=Object.assign(blank(),r); x.photoIds=Array.isArray(r.photoIds)?r.photoIds:[]; return x; });
+      const {add,conflictCount} = prepareImportRecords(d.records,records);
       Promise.all(add.map(r=>dbPut(STORE_RECORDS,r))).then(()=>{
         records = records.concat(add);
-        toast(`${add.length}件を読み込みました`); renderOut(); renderList(); updateResult();
-      });
+        toast(`${add.length}件を読み込みました${conflictCount ? `（要確認 ${conflictCount}件）` : ""}`);
+        renderOut(); renderList(); updateResult();
+      }).catch(()=>toast("保存できない記録がありました。再読み込みして確認してください"));
     }catch(err){ toast("このファイルは読み込めませんでした"); }
   };
   fr.readAsText(e.target.files[0]);
