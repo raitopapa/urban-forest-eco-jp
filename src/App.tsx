@@ -4,6 +4,8 @@ import { TreeMap } from "./components/TreeMap";
 import { exportITreeCsv, parseTreeCsv } from "./domain/treeCsv";
 import type { CsvIssue, TreeRecord } from "./domain/tree";
 import { mapSurveyRows, type SurveyRow } from "./domain/surveyRecords";
+import { KNOWN_SPECIES, prepareEcoImport } from "./domain/ecoImport";
+import { ecoWorkbook } from "./lib/ecoWorkbook";
 import { getSupabaseClient } from "./lib/supabaseClient";
 import sampleCsv from "../public/sample-trees.csv?raw";
 
@@ -20,6 +22,11 @@ export default function App() {
   const [loggedInAs, setLoggedInAs] = useState("");
   const [cloudError, setCloudError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [cloudRows, setCloudRows] = useState<SurveyRow[]>([]);
+  const [ecoOverrides, setEcoOverrides] = useState<Record<string, string>>(() => {
+    try { return JSON.parse(localStorage.getItem("urban-forest.eco-species-codes") || "{}"); }
+    catch { return {}; }
+  });
   const inputRef = useRef<HTMLInputElement>(null);
   const filteredTrees = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -30,6 +37,7 @@ export default function App() {
   const measuredDbh = trees.map((tree) => tree.dbhCm).filter((value): value is number => value !== undefined);
   const averageDbh = measuredDbh.length ? measuredDbh.reduce((sum, value) => sum + value, 0) / measuredDbh.length : 0;
   const attentionCount = trees.filter((tree) => ["poor", "critical", "dead"].includes(tree.healthCondition)).length;
+  const ecoPreparation = useMemo(() => prepareEcoImport(cloudRows, ecoOverrides), [cloudRows, ecoOverrides]);
 
   async function handleFile(file?: File) {
     if (!file) return;
@@ -55,6 +63,7 @@ export default function App() {
       if (!data || data.length < 500) break;
     }
     const mapped = mapSurveyRows(rows);
+    setCloudRows(rows);
     setTrees(mapped.trees); setIssues(mapped.issues);
     setSelectedTreeId(mapped.trees[0]?.treeId); setQuery(""); setSource("cloud");
   }
@@ -83,7 +92,24 @@ export default function App() {
   }
   async function signOut() {
     await getSupabaseClient().auth.signOut({ scope: "local" });
-    setLoggedInAs(""); setEmail(""); setPassword(""); setCloudError(""); restoreSample();
+    setLoggedInAs(""); setEmail(""); setPassword(""); setCloudError(""); setCloudRows([]); restoreSample();
+  }
+  function saveEcoCode(species: string, code: string) {
+    const updated = { ...ecoOverrides, [species]: code.toUpperCase().trim() };
+    setEcoOverrides(updated);
+    try { localStorage.setItem("urban-forest.eco-species-codes", JSON.stringify(updated)); } catch { /* browser storage unavailable */ }
+  }
+  async function downloadEcoExcel() {
+    if (ecoPreparation.issues.length || !ecoPreparation.rows.length) return;
+    setLoading(true); setCloudError("");
+    try {
+      const blob = await ecoWorkbook(ecoPreparation.rows);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url; link.download = `i-Tree_Eco_全木調査_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) { setCloudError(error instanceof Error ? error.message : "Excel出力に失敗しました。"); }
+    finally { setLoading(false); }
   }
   function downloadITreeCsv() {
     const { csv, skippedTreeIds } = exportITreeCsv(trees);
@@ -108,8 +134,15 @@ export default function App() {
         </section>
         <section className="stats" aria-label="台帳集計">
           <Stat label="登録樹木" value={`${trees.length} 本`} /><Stat label="樹種" value={`${speciesCount} 種`} /><Stat label="平均DBH" value={`${averageDbh.toFixed(1)} cm`} /><Stat label="要確認" value={`${attentionCount} 本`} alert={attentionCount > 0} />
-          <div className="stats-action"><button className="button export" onClick={downloadITreeCsv} disabled={!trees.length}>i-Tree用CSVを出力</button><small>現時点では項目変換案です。モデル計算は行いません。</small></div>
+          <div className="stats-action">{source === "cloud" ? <button className="button export" onClick={downloadEcoExcel} disabled={loading || ecoPreparation.issues.length > 0 || !ecoPreparation.rows.length}>i-Tree Eco取込用Excelを出力</button> : <button className="button export" onClick={downloadITreeCsv} disabled={!trees.some((tree) => tree.dbhCm && (tree.speciesOriginal || tree.scientificName || tree.iTreeSpeciesCode))}>i-Tree CSV草案を出力</button>}<small>{source === "cloud" ? `対象 ${ecoPreparation.rows.length}本・評価なし ${ecoPreparation.omitted}本。取込時は列の対応を設定してください。` : "CSV手動読込用の項目変換案です。"}</small></div>
         </section>
+        {source === "cloud" && <section className="eco-review" aria-label="i-Tree Eco出力確認">
+          {ecoPreparation.unmappedSpecies.length > 0 && <div><strong>樹種コードを設定してください</strong><p>現地入力の和名をi-Tree Ecoの樹種コードに対応させます。<a href="https://www.itreetools.org/support/resources-overview/i-tree-manuals-workbooks" target="_blank" rel="noreferrer">公式の樹種リスト</a>で確認できます。</p>
+            <div className="eco-codes">{ecoPreparation.unmappedSpecies.map((species) => <label key={species}>{species}<input type="text" value={ecoOverrides[species] ?? KNOWN_SPECIES[species] ?? ""} onChange={(event) => saveEcoCode(species, event.target.value)} placeholder="例: LITU" aria-label={`${species}のi-Tree樹種コード`} /></label>)}</div></div>}
+          {ecoPreparation.issues.length > 0 && <div><strong>出力前に確認が必要: {ecoPreparation.issues.length}本</strong><ul>{ecoPreparation.issues.slice(0, 15).map((issue, index) => <li key={`${issue.tree}-${index}`}>{issue.tree}: {issue.reason}</li>)}</ul></div>}
+          {ecoPreparation.omitted > 0 && <p>「i-Tree評価なし」の{ecoPreparation.omitted}本は取込対象から除外します。</p>}
+          {ecoPreparation.rows.length > 0 && !ecoPreparation.issues.length && <p>全木調査の取込用Excelを作成できます。樹種・胸高直径と、調査済みの樹高・樹冠などを収録します。i-Tree Ecoの「Complete Inventory」→「Data」→「Trees」→「Import」で列・樹種の対応と取込件数を確認してください。土地利用はプロジェクト固有の設定が必要なため含めません。</p>}
+        </section>}
         {issues.length > 0 && <details className="issues"><summary>取込結果：{issues.filter((i) => i.severity === "error").length}件のエラー、{issues.filter((i) => i.severity === "warning").length}件の注意</summary><ul>{issues.slice(0, 10).map((issue, index) => <li key={`${issue.row}-${index}`}>{issue.row ? `${issue.row}行目：` : ""}{issue.message}</li>)}</ul></details>}
         <section className="workspace">
           <div className="tree-list-panel">
